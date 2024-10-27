@@ -1,7 +1,7 @@
 // @ts-nocheck
 // Preventing TS checks with files presented in the video for a better presentation.
 import type { Message } from 'ai';
-import React, { type RefCallback } from 'react';
+import React, { type RefCallback, useState } from 'react';
 import { ClientOnly } from 'remix-utils/client-only';
 import { Menu } from '~/components/sidebar/Menu.client';
 import { IconButton } from '~/components/ui/IconButton';
@@ -10,7 +10,6 @@ import { classNames } from '~/utils/classNames';
 import { MODEL_LIST, DEFAULT_PROVIDER } from '~/utils/constants';
 import { Messages } from './Messages.client';
 import { SendButton } from './SendButton.client';
-import { useState } from 'react';
 
 import styles from './BaseChat.module.scss';
 
@@ -22,17 +21,17 @@ const EXAMPLE_PROMPTS = [
   { text: 'How do I center a div?' },
 ];
 
-const providerList = [...new Set(MODEL_LIST.map((model) => model.provider))]
+const providerList = [...new Set(MODEL_LIST.map((model) => model.provider))];
 
 const ModelSelector = ({ model, setModel, modelList, providerList }) => {
   const [provider, setProvider] = useState(DEFAULT_PROVIDER);
   return (
     <div className="mb-2">
-      <select 
+      <select
         value={provider}
         onChange={(e) => {
           setProvider(e.target.value);
-          const firstModel = [...modelList].find(m => m.provider == e.target.value);
+          const firstModel = [...modelList].find((m) => m.provider === e.target.value);
           setModel(firstModel ? firstModel.name : '');
         }}
         className="w-full p-2 rounded-lg border border-bolt-elements-borderColor bg-bolt-elements-prompt-background text-bolt-elements-textPrimary focus:outline-none"
@@ -42,20 +41,22 @@ const ModelSelector = ({ model, setModel, modelList, providerList }) => {
             {provider}
           </option>
         ))}
-          <option key="Ollama" value="Ollama">
-            Ollama
-          </option>        
+        <option key="Ollama" value="Ollama">
+          Ollama
+        </option>
       </select>
       <select
         value={model}
         onChange={(e) => setModel(e.target.value)}
         className="w-full p-2 rounded-lg border border-bolt-elements-borderColor bg-bolt-elements-prompt-background text-bolt-elements-textPrimary focus:outline-none"
       >
-        {[...modelList].filter(e => e.provider == provider && e.name).map((modelOption) => (
-          <option key={modelOption.name} value={modelOption.name}>
-            {modelOption.label}
-          </option>
-        ))}
+        {[...modelList]
+          .filter((e) => e.provider === provider && e.name)
+          .map((modelOption) => (
+            <option key={modelOption.name} value={modelOption.name}>
+              {modelOption.label}
+            </option>
+          ))}
       </select>
     </div>
   );
@@ -106,6 +107,22 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
   ) => {
     const TEXTAREA_MAX_HEIGHT = chatStarted ? 400 : 200;
 
+    // Function to handle pasting clipboard content
+    const handlePasteFromClipboard = async () => {
+      try {
+        const textFromClipboard = await navigator.clipboard.readText();
+        if (textareaRef?.current) {
+          // Append the text from clipboard to the current input
+          textareaRef.current.value += textFromClipboard;
+          handleInputChange?.({
+            target: textareaRef.current,
+          } as React.ChangeEvent<HTMLTextAreaElement>);
+        }
+      } catch (err) {
+        console.error('Failed to read clipboard contents: ', err);
+      }
+    };
+
     return (
       <div
         ref={ref}
@@ -150,59 +167,61 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
                   'sticky bottom-0': chatStarted,
                 })}
               >
-                <ModelSelector
-                  model={model}
-                  setModel={setModel}
-                  modelList={MODEL_LIST}
-                  providerList={providerList}
-                />
+                <ModelSelector model={model} setModel={setModel} modelList={MODEL_LIST} providerList={providerList} />
                 <div
                   className={classNames(
-                    'shadow-sm border border-bolt-elements-borderColor bg-bolt-elements-prompt-background backdrop-filter backdrop-blur-[8px] rounded-lg overflow-hidden',
+                    'shadow-sm border border-bolt-elements-borderColor bg-bolt-elements-prompt-background backdrop-filter rounded-lg overflow-hidden',
                   )}
+                  style={{ position: 'relative' }}
                 >
-                  <textarea
-                    ref={textareaRef}
-                    className={`w-full pl-4 pt-4 pr-16 focus:outline-none resize-none text-md text-bolt-elements-textPrimary placeholder-bolt-elements-textTertiary bg-transparent`}
-                    onKeyDown={(event) => {
-                      if (event.key === 'Enter') {
-                        if (event.shiftKey) {
-                          return;
-                        }
-
-                        event.preventDefault();
-
-                        sendMessage?.(event);
-                      }
-                    }}
-                    value={input}
-                    onChange={(event) => {
-                      handleInputChange?.(event);
-                    }}
-                    style={{
-                      minHeight: TEXTAREA_MIN_HEIGHT,
-                      maxHeight: TEXTAREA_MAX_HEIGHT,
-                    }}
-                    placeholder="How can Bolt help you today?"
-                    translate="no"
-                  />
-                  <ClientOnly>
-                    {() => (
-                      <SendButton
-                        show={input.length > 0 || isStreaming}
-                        isStreaming={isStreaming}
-                        onClick={(event) => {
-                          if (isStreaming) {
-                            handleStop?.();
+                  {/* Wrap the textarea and SendButton in a relative container */}
+                  <div className="relative">
+                    <textarea
+                      ref={textareaRef}
+                      className={`w-full pl-4 pt-4 pr-16 pb-4 focus:outline-none resize-none text-md text-bolt-elements-textPrimary placeholder-bolt-elements-textTertiary bg-transparent`}
+                      onKeyDown={(event) => {
+                        if (event.key === 'Enter') {
+                          if (event.shiftKey) {
                             return;
                           }
 
+                          event.preventDefault();
+
                           sendMessage?.(event);
-                        }}
-                      />
-                    )}
-                  </ClientOnly>
-                  <div className="flex justify-between text-sm p-4 pt-2">
+                        }
+                      }}
+                      value={input}
+                      onChange={(event) => {
+                        handleInputChange?.(event);
+                      }}
+                      style={{
+                        minHeight: TEXTAREA_MIN_HEIGHT,
+                        maxHeight: TEXTAREA_MAX_HEIGHT,
+                      }}
+                      placeholder="How can Bolt help you today?"
+                      translate="no"
+                    />
+                    {/* Send button */}
+                    <ClientOnly>
+                      {() => (
+                        <SendButton
+                          show={input.length > 0 || isStreaming}
+                          isStreaming={isStreaming}
+                          onClick={(event) => {
+                            if (isStreaming) {
+                              handleStop?.();
+                              return;
+                            }
+
+                            sendMessage?.(event);
+                          }}
+                        />
+                      )}
+                    </ClientOnly>
+                  </div>
+                  {/* Bottom icons and messages */}
+                  <div className="flex justify-between items-center text-sm p-4 pt-2">
+                    {/* Left side: Enhance prompt button */}
                     <div className="flex gap-1 items-center">
                       <IconButton
                         title="Enhance prompt"
@@ -227,11 +246,27 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
                         )}
                       </IconButton>
                     </div>
+                    {/* Middle: Shift + Return message */}
                     {input.length > 3 ? (
                       <div className="text-xs text-bolt-elements-textTertiary">
                         Use <kbd className="kdb">Shift</kbd> + <kbd className="kdb">Return</kbd> for a new line
                       </div>
-                    ) : null}
+                    ) : (
+                      <div></div> // Placeholder to maintain spacing
+                    )}
+                    {/* Right side: Paste button */}
+                    <div className="flex gap-1 items-center">
+                    <IconButton
+  title="Paste from clipboard"
+  onClick={handlePasteFromClipboard}
+  className="p-2 bg-[#E0E0E0] hover:bg-[#B0B0B0] active:bg-[#909090] text-white rounded shadow-md"
+>
+  <div className="i-heroicons-outline:clipboard-document text-2xl">
+    Paste
+  </div>
+</IconButton>
+
+                    </div>
                   </div>
                 </div>
                 <div className="bg-bolt-elements-background-depth-1 pb-6">{/* Ghost Element */}</div>
