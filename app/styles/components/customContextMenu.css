@@ -1,0 +1,23 @@
+/* customContextMenu.css */
+
+.custom-context-menu {
+    position: absolute;
+    z-index: 1000;
+    background-color: white;
+    border: 1px solid #ccc;
+    padding: 10px;
+    list-style: none;
+    box-shadow: 0px 4px 8px rgba(0, 0, 0, 0.1);
+    border-radius: 4px; /* Optional: Rounded corners for aesthetics */
+  }
+  
+  .custom-context-menu li {
+    padding: 5px 10px;
+    cursor: pointer;
+  }
+  
+  .custom-context-menu li:hover {
+    background-color: #f0f0f0;
+  }
+
+  
