@@ -242,11 +242,16 @@ const CodeBlockWithCopy: React.FC<CodeBlockWithCopyProps> = ({ code, language, i
         style={isDarkMode ? darcula : materialLight}
         wrapLongLines
         customStyle={{
-          borderRadius: '8px',
-          padding: '10px',
-          fontSize: '14px',
-          backgroundColor: isDarkMode ? '#2e3440' : '#f5f5f5',
+          borderRadius: '10px',
+          padding: '15px',
+          fontSize: '16px',
+          backgroundColor: isDarkMode ? 'rgba(255, 255, 255, 0.05)' : 'rgba(255, 255, 255, 0.7)',
+          border: isDarkMode ? '1px solid rgba(255, 255, 255, 0.2)' : '1px solid rgba(0, 0, 0, 0.1)',
+          boxShadow: '0px 8px 16px rgba(0, 0, 0, 0.3)',
+          backdropFilter: 'blur(10px)',
         }}
+
+
       >
         {code}
       </SyntaxHighlighter>

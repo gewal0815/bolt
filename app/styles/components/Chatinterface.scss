@@ -248,6 +248,18 @@
 .code-block-container {
   position: relative;
   margin-top: var(--spacing-small);
+  background-color: var(--color-secondary); /* Light blue background for light mode */
+  border-radius: var(--border-radius-small);
+  padding: var(--spacing-small);
+}
+
+/* Adjust styles for dark and light modes */
+.chat-interface.light-mode .code-block-container {
+  background-color: #f5f5f5; /* Lighter background for light mode */
+}
+
+.chat-interface.dark-mode .code-block-container {
+  background-color: #2e3440; /* Darker background for dark mode */
 }
 
 /* Copy Button in Code Block */
