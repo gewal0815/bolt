@@ -66,14 +66,11 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ onClose }) => {
 
   const getAIResponse = async (chatInput: string) => {
     try {
-      const response = await fetch(
-        'http://localhost:5678/webhook-test/c10ee4b0-da83-493c-99ad-fa81e7a0b4b7',
-        {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ input: { sessionId: sessionId, chatInput: chatInput } }),
-        }
-      );
+      const response = await fetch('http://localhost:5678/webhook-test/c10ee4b0-da83-493c-99ad-fa81e7a0b4b7', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ input: { sessionId: sessionId, chatInput: chatInput } }),
+      });
       if (!response.ok) throw new Error(`API error: ${response.statusText}`);
 
       const data = await response.json();
@@ -125,16 +122,16 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ onClose }) => {
           <div className="chat-header-controls">
             <span>{isDarkMode ? 'Dark Mode' : 'Light Mode'}</span>
             <Switch checked={isDarkMode} onChange={toggleDarkMode} />
-            <button onClick={onClose} className="chat-close-button">&times;</button>
+            <button onClick={onClose} className="chat-close-button">
+              &times;
+            </button>
           </div>
         </div>
         <div className="chat-messages">
           {messages.map((message, index) => (
             <div
               key={index}
-              className={`chat-message ${
-                message.sender === 'user' ? 'chat-message-user' : 'chat-message-ai'
-              }`}
+              className={`chat-message ${message.sender === 'user' ? 'chat-message-user' : 'chat-message-ai'}`}
             >
               <div>{message.text}</div>
               <div className="chat-message-timestamp">{message.timestamp}</div>
