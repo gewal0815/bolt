@@ -1,5 +1,6 @@
+// ChatInterface.tsx
 import React, { useState, useEffect, useRef } from 'react';
-import Draggable from 'react-draggable';
+import Draggable, { DraggableData, DraggableEvent } from 'react-draggable';
 import { v4 as uuidv4 } from 'uuid';
 import Switch from '@mui/material/Switch';
 
@@ -17,16 +18,38 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ onClose }) => {
   const [messages, setMessages] = useState<Message[]>([]);
   const [inputValue, setInputValue] = useState('');
   const [isLoading, setIsLoading] = useState(false);
-  const [isDarkMode, setIsDarkMode] = useState(true);
+  const [isDarkMode, setIsDarkMode] = useState(false);
   const messageEndRef = useRef<HTMLDivElement>(null);
+  const chatRef = useRef<HTMLDivElement>(null); 
   const [sessionId] = useState<string>(() => uuidv4());
-  const [position, setPosition] = useState<{ x: number; y: number }>({ x: 0, y: 100 });
 
+  // Position state for Draggable
+  const [position, setPosition] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
+
+
+  // Calculate initial position based on actual element size and viewport
   useEffect(() => {
-    const initialX = window.innerWidth * 0.2; // Center the chat interface horizontally
-    setPosition((prevPosition) => ({ ...prevPosition, x: initialX }));
+    const calculateInitialPosition = () => {
+      if (chatRef.current) {
+        const chatWidth = chatRef.current.offsetWidth;
+        const chatHeight = chatRef.current.offsetHeight;
+        const initialX = (window.innerWidth - chatWidth) / 2;
+        const initialY = (window.innerHeight - chatHeight) / 2;
+        return { x: initialX, y: initialY };
+      }
+      return { x: 0, y: 0 };
+    };
+
+    // Delay calculation to ensure the element is rendered and dimensions are available
+    const timer = setTimeout(() => {
+      const initialPosition = calculateInitialPosition();
+      setPosition(initialPosition);
+    }, 0);
+
+    return () => clearTimeout(timer);
   }, []);
 
+  // Scroll to the latest message whenever messages update
   useEffect(() => {
     messageEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
@@ -95,13 +118,22 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ onClose }) => {
     setIsDarkMode((prev) => !prev);
   };
 
+  // Handle drag to update position state
+  const handleDrag = (e: DraggableEvent, data: DraggableData) => {
+    setPosition({ x: data.x, y: data.y });
+  };
+
   return (
     <Draggable
       handle=".chat-header"
       position={position}
-      onDrag={(e, data) => setPosition({ x: data.x, y: data.y })}
+      onDrag={handleDrag}
+      nodeRef={chatRef}
     >
-      <div className={`chat-interface ${isDarkMode ? 'dark-mode' : 'light-mode'}`}>
+      <div
+        className={`chat-interface ${isDarkMode ? 'dark-mode' : 'light-mode'}`}
+        ref={chatRef} // Attach ref to the chat interface
+      >
         <div className="chat-header">
           <h1 className="chat-title">Chat Interface</h1>
           <div className="chat-header-controls">
