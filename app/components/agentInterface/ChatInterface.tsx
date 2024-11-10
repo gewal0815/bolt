@@ -20,14 +20,11 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ onClose }) => {
   const [isLoading, setIsLoading] = useState(false);
   const [isDarkMode, setIsDarkMode] = useState(false);
   const messageEndRef = useRef<HTMLDivElement>(null);
-  const chatRef = useRef<HTMLDivElement>(null); 
+  const chatRef = useRef<HTMLDivElement>(null);
   const [sessionId] = useState<string>(() => uuidv4());
 
-  // Position state for Draggable
   const [position, setPosition] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
 
-
-  // Calculate initial position based on actual element size and viewport
   useEffect(() => {
     const calculateInitialPosition = () => {
       if (chatRef.current) {
@@ -40,7 +37,6 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ onClose }) => {
       return { x: 0, y: 0 };
     };
 
-    // Delay calculation to ensure the element is rendered and dimensions are available
     const timer = setTimeout(() => {
       const initialPosition = calculateInitialPosition();
       setPosition(initialPosition);
@@ -49,7 +45,6 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ onClose }) => {
     return () => clearTimeout(timer);
   }, []);
 
-  // Scroll to the latest message whenever messages update
   useEffect(() => {
     messageEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
@@ -72,7 +67,7 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ onClose }) => {
   const getAIResponse = async (chatInput: string) => {
     try {
       const response = await fetch(
-        'http://localhost:5678/webhook-test/9ba11544-5c4e-4f91-818a-08a4ecb596c5',
+        'http://localhost:5678/webhook-test/c10ee4b0-da83-493c-99ad-fa81e7a0b4b7',
         {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -118,30 +113,19 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ onClose }) => {
     setIsDarkMode((prev) => !prev);
   };
 
-  // Handle drag to update position state
   const handleDrag = (e: DraggableEvent, data: DraggableData) => {
     setPosition({ x: data.x, y: data.y });
   };
 
   return (
-    <Draggable
-      handle=".chat-header"
-      position={position}
-      onDrag={handleDrag}
-      nodeRef={chatRef}
-    >
-      <div
-        className={`chat-interface ${isDarkMode ? 'dark-mode' : 'light-mode'}`}
-        ref={chatRef} // Attach ref to the chat interface
-      >
+    <Draggable handle=".chat-header" position={position} onDrag={handleDrag} nodeRef={chatRef}>
+      <div className={`chat-interface ${isDarkMode ? 'dark-mode' : 'light-mode'}`} ref={chatRef}>
         <div className="chat-header">
           <h1 className="chat-title">Chat Interface</h1>
           <div className="chat-header-controls">
             <span>{isDarkMode ? 'Dark Mode' : 'Light Mode'}</span>
             <Switch checked={isDarkMode} onChange={toggleDarkMode} />
-            <button onClick={onClose} className="chat-close-button">
-              &times;
-            </button>
+            <button onClick={onClose} className="chat-close-button">&times;</button>
           </div>
         </div>
         <div className="chat-messages">
@@ -152,7 +136,7 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ onClose }) => {
                 message.sender === 'user' ? 'chat-message-user' : 'chat-message-ai'
               }`}
             >
-              <div className="chat-message-text">{message.text}</div>
+              <div>{message.text}</div>
               <div className="chat-message-timestamp">{message.timestamp}</div>
             </div>
           ))}
