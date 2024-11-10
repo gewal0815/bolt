@@ -1,8 +1,10 @@
-// ChatInterface.tsx
 import React, { useState, useEffect, useRef } from 'react';
 import Draggable, { DraggableData, DraggableEvent } from 'react-draggable';
 import { v4 as uuidv4 } from 'uuid';
 import Switch from '@mui/material/Switch';
+import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
+import { darcula } from 'react-syntax-highlighter/dist/esm/styles/prism'; // Dark theme for code blocks
+import { materialLight } from 'react-syntax-highlighter/dist/esm/styles/prism'; // Light theme for code blocks
 
 interface Message {
   sender: 'user' | 'ai';
@@ -22,27 +24,17 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ onClose }) => {
   const messageEndRef = useRef<HTMLDivElement>(null);
   const chatRef = useRef<HTMLDivElement>(null);
   const [sessionId] = useState<string>(() => uuidv4());
-
-  const [position, setPosition] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
+  const [position, setPosition] = useState<{ x: number; y: number }>(() => {
+    const savedPosition = localStorage.getItem('chatPosition');
+    return savedPosition ? JSON.parse(savedPosition) : { x: 0, y: 0 };
+  });
 
   useEffect(() => {
-    const calculateInitialPosition = () => {
-      if (chatRef.current) {
-        const chatWidth = chatRef.current.offsetWidth;
-        const chatHeight = chatRef.current.offsetHeight;
-        const initialX = (window.innerWidth - chatWidth) / 2;
-        const initialY = (window.innerHeight - chatHeight) / 2;
-        return { x: initialX, y: initialY };
-      }
-      return { x: 0, y: 0 };
-    };
-
-    const timer = setTimeout(() => {
-      const initialPosition = calculateInitialPosition();
-      setPosition(initialPosition);
-    }, 0);
-
-    return () => clearTimeout(timer);
+    if (!localStorage.getItem('chatPosition')) {
+      const initialX = (window.innerWidth - 400) / 2; // Approximate center
+      const initialY = (window.innerHeight - 600) / 2;
+      setPosition({ x: initialX, y: initialY });
+    }
   }, []);
 
   useEffect(() => {
@@ -111,7 +103,35 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ onClose }) => {
   };
 
   const handleDrag = (e: DraggableEvent, data: DraggableData) => {
-    setPosition({ x: data.x, y: data.y });
+    const newPosition = { x: data.x, y: data.y };
+    setPosition(newPosition);
+    localStorage.setItem('chatPosition', JSON.stringify(newPosition));
+  };
+
+  const renderMessage = (message: Message) => {
+    const codeRegex = /```([\s\S]+?)```/g;
+    const parts = message.text.split(codeRegex);
+
+    return parts.map((part, index) =>
+      index % 2 === 1 ? (
+        <SyntaxHighlighter
+          key={index}
+          language="java" // Adjust the language as needed or detect it dynamically if possible
+          style={isDarkMode ? darcula : materialLight}
+          wrapLongLines
+          customStyle={{
+            borderRadius: '8px',
+            padding: '10px',
+            fontSize: '14px',
+            backgroundColor: isDarkMode ? '#2e3440' : '#f5f5f5',
+          }}
+        >
+          {part}
+        </SyntaxHighlighter>
+      ) : (
+        <span key={index} style={{ whiteSpace: 'pre-wrap' }}>{part}</span>
+      )
+    );
   };
 
   return (
@@ -132,9 +152,17 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ onClose }) => {
             <div
               key={index}
               className={`chat-message ${message.sender === 'user' ? 'chat-message-user' : 'chat-message-ai'}`}
+              style={{
+                padding: '8px 12px',
+                borderRadius: '8px',
+                marginBottom: '10px',
+                maxWidth: '80%',
+                backgroundColor: message.sender === 'user' ? (isDarkMode ? '#4a90e2' : '#d0e4ff') : (isDarkMode ? '#333' : '#f0f0f0'),
+                color: message.sender === 'user' ? '#fff' : '#000',
+              }}
             >
-              <div>{message.text}</div>
-              <div className="chat-message-timestamp">{message.timestamp}</div>
+              <div>{renderMessage(message)}</div>
+              <div className="chat-message-timestamp" style={{ fontSize: '12px', marginTop: '4px', color: '#888' }}>{message.timestamp}</div>
             </div>
           ))}
           {isLoading && <div className="chat-loading-indicator">Loading...</div>}
