@@ -7,6 +7,8 @@ import Switch from '@mui/material/Switch';
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
 import { darcula } from 'react-syntax-highlighter/dist/esm/styles/prism'; // Dark theme for code blocks
 import { materialLight } from 'react-syntax-highlighter/dist/esm/styles/prism'; // Light theme for code blocks
+import ContentCopyIcon from '@mui/icons-material/ContentCopy'; // Import copy icon
+import Tooltip from '@mui/material/Tooltip'; // Import Tooltip for copy feedback
 
 interface Message {
   sender: 'user' | 'ai';
@@ -111,31 +113,61 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ onClose }) => {
   };
 
   const renderMessage = (message: Message) => {
-    const codeRegex = /```([\s\S]+?)```/g;
-    const parts = message.text.split(codeRegex);
+    const parts = parseMessageText(message.text);
 
-    return parts.map((part, index) =>
-      index % 2 === 1 ? (
-        <SyntaxHighlighter
-          key={index}
-          language="javascript" // Adjust the language as needed or detect it dynamically if possible
-          style={isDarkMode ? darcula : materialLight}
-          wrapLongLines
-          customStyle={{
-            borderRadius: '8px',
-            padding: '10px',
-            fontSize: '14px',
-            backgroundColor: isDarkMode ? '#2e3440' : '#f5f5f5',
-          }}
-        >
-          {part}
-        </SyntaxHighlighter>
-      ) : (
-        <span key={index} style={{ whiteSpace: 'pre-wrap' }}>
-          {part}
-        </span>
-      )
-    );
+    return parts.map((part, index) => {
+      if (part.type === 'code') {
+        return (
+          <CodeBlockWithCopy
+            key={index}
+            code={part.content}
+            language={part.language}
+            isDarkMode={isDarkMode}
+          />
+        );
+      } else {
+        return (
+          <span key={index} style={{ whiteSpace: 'pre-wrap' }}>
+            {part.content}
+          </span>
+        );
+      }
+    });
+  };
+
+  const parseMessageText = (text: string) => {
+    const regex = /```(\w+)?\n([\s\S]+?)```/g;
+    let match;
+    let lastIndex = 0;
+    const result = [];
+
+    while ((match = regex.exec(text)) !== null) {
+      if (match.index > lastIndex) {
+        // Add text before code block
+        result.push({
+          type: 'text',
+          content: text.substring(lastIndex, match.index),
+        });
+      }
+
+      result.push({
+        type: 'code',
+        language: match[1] || 'text',
+        content: match[2],
+      });
+
+      lastIndex = regex.lastIndex;
+    }
+
+    if (lastIndex < text.length) {
+      // Add remaining text
+      result.push({
+        type: 'text',
+        content: text.substring(lastIndex),
+      });
+    }
+
+    return result;
   };
 
   return (
@@ -179,6 +211,55 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ onClose }) => {
         </div>
       </div>
     </Draggable>
+  );
+};
+
+interface CodeBlockWithCopyProps {
+  code: string;
+  language: string;
+  isDarkMode: boolean;
+}
+
+const CodeBlockWithCopy: React.FC<CodeBlockWithCopyProps> = ({ code, language, isDarkMode }) => {
+  const [copySuccess, setCopySuccess] = useState(false);
+
+  const handleCopyCode = () => {
+    navigator.clipboard.writeText(code).then(
+      () => {
+        setCopySuccess(true);
+        setTimeout(() => setCopySuccess(false), 2000); // Clear message after 2 seconds
+      },
+      (err) => {
+        console.error('Could not copy text: ', err);
+      }
+    );
+  };
+
+  return (
+    <div className="code-block-container">
+      <SyntaxHighlighter
+        language={language}
+        style={isDarkMode ? darcula : materialLight}
+        wrapLongLines
+        customStyle={{
+          borderRadius: '8px',
+          padding: '10px',
+          fontSize: '14px',
+          backgroundColor: isDarkMode ? '#2e3440' : '#f5f5f5',
+        }}
+      >
+        {code}
+      </SyntaxHighlighter>
+      <Tooltip title={copySuccess ? 'Copied!' : 'Copy'} placement="top" arrow>
+        <button
+          onClick={handleCopyCode}
+          className="copy-code-button"
+          aria-label="Copy code"
+        >
+          <ContentCopyIcon fontSize="small" />
+        </button>
+      </Tooltip>
+    </div>
   );
 };
 
