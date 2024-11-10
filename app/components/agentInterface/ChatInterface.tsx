@@ -1,3 +1,5 @@
+// ChatInterface.tsx
+
 import React, { useState, useEffect, useRef } from 'react';
 import Draggable, { DraggableData, DraggableEvent } from 'react-draggable';
 import { v4 as uuidv4 } from 'uuid';
@@ -116,7 +118,7 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ onClose }) => {
       index % 2 === 1 ? (
         <SyntaxHighlighter
           key={index}
-          language="java" // Adjust the language as needed or detect it dynamically if possible
+          language="javascript" // Adjust the language as needed or detect it dynamically if possible
           style={isDarkMode ? darcula : materialLight}
           wrapLongLines
           customStyle={{
@@ -129,7 +131,9 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ onClose }) => {
           {part}
         </SyntaxHighlighter>
       ) : (
-        <span key={index} style={{ whiteSpace: 'pre-wrap' }}>{part}</span>
+        <span key={index} style={{ whiteSpace: 'pre-wrap' }}>
+          {part}
+        </span>
       )
     );
   };
@@ -142,7 +146,7 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ onClose }) => {
           <div className="chat-header-controls">
             <span>{isDarkMode ? 'Dark Mode' : 'Light Mode'}</span>
             <Switch checked={isDarkMode} onChange={toggleDarkMode} />
-            <button onClick={onClose} className="chat-close-button">
+            <button onClick={onClose} className="chat-close-button" aria-label="Close Chat">
               &times;
             </button>
           </div>
@@ -152,17 +156,9 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ onClose }) => {
             <div
               key={index}
               className={`chat-message ${message.sender === 'user' ? 'chat-message-user' : 'chat-message-ai'}`}
-              style={{
-                padding: '8px 12px',
-                borderRadius: '8px',
-                marginBottom: '10px',
-                maxWidth: '80%',
-                backgroundColor: message.sender === 'user' ? (isDarkMode ? '#4a90e2' : '#d0e4ff') : (isDarkMode ? '#333' : '#f0f0f0'),
-                color: message.sender === 'user' ? '#fff' : '#000',
-              }}
             >
               <div>{renderMessage(message)}</div>
-              <div className="chat-message-timestamp" style={{ fontSize: '12px', marginTop: '4px', color: '#888' }}>{message.timestamp}</div>
+              <div className="chat-message-timestamp">{message.timestamp}</div>
             </div>
           ))}
           {isLoading && <div className="chat-loading-indicator">Loading...</div>}
