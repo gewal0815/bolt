@@ -19,6 +19,8 @@ import { EditorPanel } from './EditorPanel';
 import { Preview } from './Preview';
 import { UploadPanel } from '~/components/workbench/UploadPanelContainer';
 import { useDropzone } from 'react-dropzone';
+import ChatInterface from '~/components/agentInterface/ChatInterface';
+
 
 interface WorkspaceProps {
   chatStarted?: boolean;
@@ -111,6 +113,17 @@ export const Workbench = memo(({ chatStarted, isStreaming }: WorkspaceProps) => 
     },
     multiple: true,
   });
+
+  const [isChatOpen, setIsChatOpen] = useState(false);
+
+  const openChatInterface = () => {
+    setIsChatOpen(true);
+  };
+
+  const closeChatInterface = () => {
+    setIsChatOpen(false);
+  };
+
 
   const onDropProject = useCallback((acceptedFiles: File[]) => {
     if (acceptedFiles.length > 0) {
@@ -258,6 +271,7 @@ export const Workbench = memo(({ chatStarted, isStreaming }: WorkspaceProps) => 
             </div>
           </div>
         </div>
+        {isChatOpen && <ChatInterface onClose={closeChatInterface} />}
       </motion.div>
     )
   );
