@@ -111,7 +111,7 @@ export const Workbench = memo(({ chatStarted, isStreaming }: WorkspaceProps) => 
     },
     multiple: true,
   });
-  
+
   const onDropProject = useCallback((acceptedFiles: File[]) => {
     if (acceptedFiles.length > 0) {
       const file = acceptedFiles[0];
@@ -151,6 +151,7 @@ export const Workbench = memo(({ chatStarted, isStreaming }: WorkspaceProps) => 
                 <div className="ml-auto" />
                 {selectedView === 'code' && (
                   <>
+                    {/* Existing buttons */}
                     <PanelHeaderButton
                       className="mr-1 text-sm"
                       onClick={() => {
@@ -171,10 +172,21 @@ export const Workbench = memo(({ chatStarted, isStreaming }: WorkspaceProps) => 
                     </PanelHeaderButton>
                     <PanelHeaderButton
                       className="mr-1 text-sm"
-                      onClick={() => setShowUploadButtons(!showUploadButtons)} // Toggle upload buttons visibility
+                      onClick={() => setShowUploadButtons(!showUploadButtons)}
                     >
                       <div className="i-ph:upload" />
                       Upload Options
+                    </PanelHeaderButton>
+                    {/* Add your Chat Icon Button here */}
+                    <PanelHeaderButton
+                      className="mr-1 text-sm"
+                      onClick={() => {
+                        // Handle the logic to open the chat interface
+                        openChatInterface();
+                      }}
+                    >
+                      <div className="i-ph:chat-centered" />
+                      Chat
                     </PanelHeaderButton>
                   </>
                 )}
@@ -208,7 +220,8 @@ export const Workbench = memo(({ chatStarted, isStreaming }: WorkspaceProps) => 
                       workbenchStore.setCurrentDocumentContent(update.content);
                     }}
                     onFileSave={() => {
-                      workbenchStore.saveCurrentDocument()
+                      workbenchStore
+                        .saveCurrentDocument()
                         .then(() => toast.success('File saved successfully!'))
                         .catch(() => toast.error('Failed to update file content'));
                     }}
