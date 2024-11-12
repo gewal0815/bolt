@@ -45,37 +45,75 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ onClose }) => {
     messageEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
 
-  const handleSend = () => {
+  const handleSend = async () => {
     if (!inputValue.trim()) return;
 
     const userMessage: Message = {
       sender: 'user',
       text: inputValue,
-      timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+      timestamp: new Date().toISOString(),
     };
 
     setMessages((prev) => [...prev, userMessage]);
     setInputValue('');
     setIsLoading(true);
-    getAIResponse(inputValue);
+
+    try {
+      // Save user message to the backend
+      const response = await fetch('http://localhost:5000/api/messages', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          session_id: sessionId,
+          message: userMessage,
+        }),
+      });
+
+      if (!response.ok) throw new Error(`Backend Save error: ${response.statusText}`);
+
+      // Fetch and save AI response
+      await getAIResponse(inputValue);
+    } catch (error) {
+      console.error('Error saving user message:', error);
+      setIsLoading(false);
+      // Optionally, notify the user about the save failure
+    }
   };
+
 
   const getAIResponse = async (chatInput: string) => {
     try {
-      const response = await fetch('http://localhost:5678/webhook-test/c10ee4b0-da83-493c-99ad-fa81e7a0b4b7', {
+      // Fetch AI response from webhook
+      const response = await fetch('http://localhost:5678/webhook/9ba11544-5c4e-4f91-818a-08a4ecb596c5', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ input: { sessionId: sessionId, chatInput: chatInput } }),
       });
-      if (!response.ok) throw new Error(`API error: ${response.statusText}`);
+      if (!response.ok) throw new Error(`AI Webhook error: ${response.statusText}`);
 
       const data = await response.json();
       const aiMessage: Message = {
         sender: 'ai',
         text: data.output || 'No response from AI.',
-        timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+        timestamp: new Date().toISOString(),
       };
       setMessages((prev) => [...prev, aiMessage]);
+
+      // Save AI message to the backend
+      try {
+        const saveResponse = await fetch('http://localhost:5000/api/messages', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            session_id: sessionId,
+            message: aiMessage,
+          }),
+        });
+        if (!saveResponse.ok) throw new Error(`Backend Save error: ${saveResponse.statusText}`);
+      } catch (saveError) {
+        console.error('Error saving AI message:', saveError);
+        // Optionally, notify the user about the save failure
+      }
     } catch (error) {
       console.error('Error fetching AI response:', error);
       setMessages((prev) => [
@@ -83,13 +121,14 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ onClose }) => {
         {
           sender: 'ai',
           text: 'Error processing your request.',
-          timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+          timestamp: new Date().toISOString(),
         },
       ]);
     } finally {
       setIsLoading(false);
     }
   };
+
 
   const handleInputChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     setInputValue(e.target.value);
