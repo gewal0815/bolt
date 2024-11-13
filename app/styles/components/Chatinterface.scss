@@ -49,16 +49,13 @@
   flex-direction: column;
   font-family: var(--font-family);
   overflow: hidden;
-  position: absolute;
+  position: relative; /* Changed from absolute to relative */
   border: 1px solid var(--color-border-light);
   background-color: var(--color-background-light);
   color: var(--color-text-light);
   transition: background-color 0.3s, color 0.3s, border-color 0.3s;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
-
-  /* Positioning for the fixed extension handle */
-  position: relative;
 
   /* Show Reset Button When Needed */
   &.show-reset .reset-width-button {
@@ -303,16 +300,28 @@
   background-color: #2e3440; /* Darker background for dark mode */
 }
 
-/* Copy Button in Code Block */
-.copy-code-button {
+/* Code Block Buttons Container */
+.code-block-buttons {
   position: absolute;
   top: 10px;
   right: 10px;
+  display: flex;
+  gap: 8px;
+}
+
+/* Copy and Select Buttons in Code Block */
+.copy-code-button,
+.select-code-button {
   background: transparent;
   border: none;
   cursor: pointer;
   color: inherit;
-  padding: 5px; /* Added padding */
+  padding: 5px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px; /* Ensures same size as icons */
+  height: 24px; /* Ensures same size as icons */
 
   &:focus {
     outline: none;
@@ -321,13 +330,44 @@
   &:hover {
     opacity: 0.8;
   }
+
+  svg {
+    width: 20px;
+    height: 20px;
+  }
+}
+
+/* Delete Button in Code Block */
+.delete-code-button {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  color: #ff4d4d; /* Red color for delete */
+  padding: 5px;
+  display: none; /* Initially hidden */
+
+  &:focus {
+    outline: none;
+  }
+
+  &:hover {
+    opacity: 0.8;
+  }
+
+  svg {
+    width: 20px;
+    height: 20px;
+  }
 }
 
 /* Chat Input Area */
 .chat-input-area {
   display: flex;
   align-items: center;
-  padding: var(--spacing-medium);
+  padding: var(--spacing-medium) 30px var(--spacing-medium) var(--spacing-medium); /* Added 30px right padding */
   border-top: 1px solid rgba(0, 0, 0, 0.1);
   background-color: var(--color-secondary);
   transition: background-color 0.3s, border-color 0.3s;
@@ -427,6 +467,13 @@
   z-index: 10; /* Ensure it's above other elements */
 }
 
+.extension-handle-label {
+  font-size: 14px;
+  color: #666666;
+  margin-bottom: 5px;
+}
+
+/* Drag Indicator Button */
 .extension-handle-button {
   background: transparent;
   border: none;
@@ -453,7 +500,6 @@
 
 /* Reset Button */
 .reset-width-button {
-  margin-top: 10px; /* Space between handle and reset button */
   background: transparent;
   border: none;
   cursor: pointer;
@@ -465,7 +511,7 @@
   height: 48px; /* Increased size */
   border-radius: 6px; /* Slight rounding for aesthetics */
   transition: background-color 0.3s;
-  display: none; /* Initially hidden */
+  margin-bottom: 10px; /* Space between reset button and drag label */
 
   &:hover {
     background-color: rgba(0, 0, 0, 0.1);
@@ -475,6 +521,40 @@
     fill: currentColor;
     width: 24px; /* Increased icon size */
     height: 24px; /* Increased icon size */
+  }
+}
+
+/* Grey Line */
+.extension-handle-grey-line {
+  width: 40px;
+  height: 1px;
+  background-color: #cccccc;
+  margin: 10px 0;
+}
+
+/* Placeholder Icons */
+.placeholder-button {
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  padding: 5px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px; /* Adjusted size to match other buttons */
+  height: 24px; /* Adjusted size to match other buttons */
+  border-radius: 6px; /* Slight rounding for aesthetics */
+  transition: background-color 0.3s;
+  margin-bottom: 5px; /* Space between placeholders */
+
+  &:hover {
+    background-color: rgba(0, 0, 0, 0.1);
+  }
+
+  svg {
+    fill: currentColor;
+    width: 20px; /* Adjusted icon size */
+    height: 20px; /* Adjusted icon size */
   }
 }
 
@@ -523,9 +603,10 @@
     font-size: 12px;
   }
 
-  /* Adjust extension handle and reset button for smaller screens */
+  /* Adjust extension handle and buttons for smaller screens */
   .extension-handle-button,
-  .reset-width-button {
+  .reset-width-button,
+  .placeholder-button {
     width: 40px;
     height: 40px;
 
@@ -533,5 +614,9 @@
       width: 20px;
       height: 20px;
     }
+  }
+
+  .extension-handle-grey-line {
+    width: 30px;
   }
 }

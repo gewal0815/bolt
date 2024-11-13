@@ -9,9 +9,10 @@ import { darcula } from 'react-syntax-highlighter/dist/esm/styles/prism'; // Dar
 import { materialLight } from 'react-syntax-highlighter/dist/esm/styles/prism'; // Light theme for code blocks
 import ContentCopyIcon from '@mui/icons-material/ContentCopy'; // Import copy icon
 import Tooltip from '@mui/material/Tooltip'; // Import Tooltip for copy feedback
-import DragIndicatorIcon from '@mui/icons-material/DragIndicator';
-import RestoreIcon from '@mui/icons-material/Restore';
-
+import DragIndicatorIcon from '@mui/icons-material/DragIndicator'; // Import drag handle icon
+import RestoreIcon from '@mui/icons-material/Restore'; // Import reset icon
+import InsertPhotoIcon from '@mui/icons-material/InsertPhoto'; // Placeholder icon 1
+import InsertEmoticonIcon from '@mui/icons-material/InsertEmoticon'; // Placeholder icon 2
 
 interface Message {
   id: string;
@@ -335,6 +336,7 @@ interface CodeBlockWithCopyProps {
 
 const CodeBlockWithCopy: React.FC<CodeBlockWithCopyProps> = ({ code, language, isDarkMode }) => {
   const [copySuccess, setCopySuccess] = useState(false);
+  const [isSelected, setIsSelected] = useState(false);
 
   const handleCopyCode = (e: React.MouseEvent<HTMLButtonElement>) => {
     e.preventDefault(); // Prevent default behavior
@@ -347,6 +349,20 @@ const CodeBlockWithCopy: React.FC<CodeBlockWithCopyProps> = ({ code, language, i
         console.error('Could not copy text: ', err);
       }
     );
+  };
+
+  const handleSelectCode = (e: React.MouseEvent<HTMLButtonElement>) => {
+    e.preventDefault();
+    setIsSelected((prev) => !prev);
+  };
+
+  const handleDeleteCode = (e: React.MouseEvent<HTMLButtonElement>) => {
+    e.preventDefault();
+    // Placeholder for delete functionality
+    // You can emit an event or call a prop function to handle deletion
+    console.log('Delete code snippet:', code);
+    // Reset selection after deletion
+    setIsSelected(false);
   };
 
   return (
@@ -367,11 +383,51 @@ const CodeBlockWithCopy: React.FC<CodeBlockWithCopyProps> = ({ code, language, i
       >
         {code}
       </SyntaxHighlighter>
-      <Tooltip title={copySuccess ? 'Copied!' : 'Copy'} placement="top" arrow>
-        <button onClick={handleCopyCode} className="copy-code-button" aria-label="Copy code">
-          <ContentCopyIcon fontSize="small" />
-        </button>
-      </Tooltip>
+
+      {/* Buttons Container */}
+      <div className="code-block-buttons">
+        {/* Select Button */}
+        <Tooltip title={isSelected ? 'Deselect' : 'Select'} placement="top" arrow>
+          <button onClick={handleSelectCode} className="select-code-button" aria-label="Select code for deletion">
+            {/* Using a select icon, e.g., CheckBoxOutlineBlankIcon */}
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              height="20px"
+              viewBox="0 0 24 24"
+              width="20px"
+              fill={isSelected ? '#1a73e8' : 'currentColor'}
+            >
+              <path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm-1 14l-5-5 1.41-1.41L18 16.17l-7.59-7.59L9 10l6 6z" />
+            </svg>
+          </button>
+        </Tooltip>
+
+        {/* Copy Button */}
+        <Tooltip title={copySuccess ? 'Copied!' : 'Copy'} placement="top" arrow>
+          <button onClick={handleCopyCode} className="copy-code-button" aria-label="Copy code">
+            <ContentCopyIcon />
+          </button>
+        </Tooltip>
+      </div>
+
+      {/* Delete Button - Visible Only When Selected */}
+      {isSelected && (
+        <Tooltip title="Delete" placement="top" arrow>
+          <button onClick={handleDeleteCode} className="delete-code-button" aria-label="Delete code snippet">
+            {/* Using a delete icon, e.g., DeleteIcon */}
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              height="20px"
+              viewBox="0 0 24 24"
+              width="20px"
+              fill="currentColor"
+            >
+              <path d="M0 0h24v24H0z" fill="none" />
+              <path d="M16 9v10H8V9h8m-1.5-6h-5l-1 1H5v2h14V4h-4.5l-1-1zM18 7H6v12c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7z" />
+            </svg>
+          </button>
+        </Tooltip>
+      )}
     </div>
   );
 };
@@ -438,35 +494,45 @@ const ExtensionHandle: React.FC<ExtensionHandleProps> = ({
 
   return (
     <div className="extension-handle-container">
-      <button
-        className="extension-handle-button"
-        onMouseDown={handleMouseDown}
-        aria-label="Extend AI Response"
-      >
-        <DragIndicatorIcon
-          style={{
-            color: isDarkMode ? '#ffffff' : '#000000',
-            cursor: 'ew-resize',
-            width: '24px', // Increased icon size
-            height: '24px', // Increased icon size
-          }}
-        />
-      </button>
-      {showResetButton && (
+      {/* Reset Button with Tooltip */}
+      <Tooltip title="Reset to Default" placement="left" arrow>
         <button
           className="reset-width-button"
           onClick={onReset}
           aria-label="Reset AI Response Width"
         >
-          <RestoreIcon
-            style={{
-              color: isDarkMode ? '#ffffff' : '#000000',
-              width: '24px', // Increased icon size
-              height: '24px', // Increased icon size
-            }}
-          />
+          <RestoreIcon />
         </button>
-      )}
+      </Tooltip>
+
+      {/* Drag Label */}
+      <span className="extension-handle-label">Drag</span>
+
+      {/* Drag Indicator with Tooltip */}
+      <Tooltip title="Drag to Resize" placement="left" arrow>
+        <button
+          className="extension-handle-button"
+          onMouseDown={handleMouseDown}
+          aria-label="Drag to Resize AI Response"
+        >
+          <DragIndicatorIcon />
+        </button>
+      </Tooltip>
+
+      {/* Grey Line */}
+      <div className="extension-handle-grey-line"></div>
+
+      {/* Placeholder Icons with Tooltips */}
+      <Tooltip title="Placeholder 1" placement="left" arrow>
+        <button className="placeholder-button" aria-label="Placeholder 1">
+          <InsertPhotoIcon />
+        </button>
+      </Tooltip>
+      <Tooltip title="Placeholder 2" placement="left" arrow>
+        <button className="placeholder-button" aria-label="Placeholder 2">
+          <InsertEmoticonIcon />
+        </button>
+      </Tooltip>
     </div>
   );
 };
