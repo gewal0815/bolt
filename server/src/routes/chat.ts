@@ -1,34 +1,9 @@
 // backend/src/routes/chat.ts
 
 import { Router, Request, Response } from 'express';
-import pool from '../db';
+import pool from '../db'; // Ensure this points to your PostgreSQL pool configuration
 
 const router = Router();
-
-/**
- * POST /api/messages
- * Create a new chat message
- */
-router.post('/messages', async (req: Request, res: Response): Promise<void> => {
-  const { session_id, message } = req.body;
-
-  // Validate request payload
-  if (!session_id || !message || !message.sender || !message.text) {
-    res.status(400).json({ error: 'Invalid request payload' });
-    return;
-  }
-
-  try {
-    await pool.query(
-      'INSERT INTO n8n_chat_histories (session_id, message, timestamp) VALUES ($1, $2, NOW())',
-      [session_id, message]
-    );
-    res.status(201).json({ message: 'Chat message created successfully' });
-  } catch (error) {
-    console.error('Error inserting chat message:', error);
-    res.status(500).json({ error: 'Internal server error' });
-  }
-});
 
 /**
  * GET /api/messages
@@ -40,80 +15,76 @@ router.post('/messages', async (req: Request, res: Response): Promise<void> => {
 router.get('/messages', async (req: Request, res: Response): Promise<void> => {
   const { session_id, time_period } = req.query;
 
+  console.log('--- Received GET /api/messages Request ---');
+  console.log(`Query Parameters: session_id=${session_id}, time_period=${time_period}`);
+
   // Validate query parameters
   if (!session_id || typeof session_id !== 'string') {
+    console.error('Invalid session_id provided');
     res.status(400).json({ error: 'session_id is required and must be a string' });
     return;
   }
 
-  const period = typeof time_period === 'string' ? time_period : '1 week'; // Default to 1 week
+  const period = typeof time_period === 'string' ? time_period : '1 month'; // Default to 1 month
+  console.log(`Using time_period: ${period}`);
 
   try {
-    const result = await pool.query(
-      `
-      SELECT * FROM n8n_chat_histories
+    const queryText = `
+      SELECT message, timestamp FROM n8n_chat_histories
       WHERE session_id = $1 AND timestamp >= NOW() - $2::interval
       ORDER BY timestamp ASC
-      `,
-      [session_id, period]
-    );
-    res.status(200).json(result.rows);
+    `;
+    console.log(`Executing SQL Query: ${queryText}`);
+    console.log(`With Parameters: session_id=${session_id}, period=${period}`);
+
+    const result = await pool.query(queryText, [session_id, period]);
+
+    console.log(`Database Query Returned ${result.rowCount} rows`);
+
+    // Map the result to extract and structure message objects
+    const messages = result.rows.map(row => {
+      let parsedMessage: { sender: 'user' | 'ai'; text: string; timestamp: string };
+
+      // Ensure 'message' is a valid JSON object with 'type' and 'content'
+      if (
+        typeof row.message === 'object' &&
+        row.message !== null &&
+        typeof row.message.type === 'string' &&
+        typeof row.message.content === 'string'
+      ) {
+        // Map 'type' to 'sender'
+        let sender: 'user' | 'ai';
+        if (row.message.type.toLowerCase() === 'human') {
+          sender = 'user';
+        } else if (row.message.type.toLowerCase() === 'ai') {
+          sender = 'ai';
+        } else {
+          sender = 'ai'; // Default to 'ai' if type is unrecognized
+          console.warn(`Unrecognized message type: ${row.message.type}. Defaulting sender to 'ai'.`);
+        }
+
+        parsedMessage = {
+          sender: sender,
+          text: row.message.content,
+          timestamp: row.timestamp.toISOString(), // Convert to ISO string for frontend consistency
+        };
+      } else {
+        console.warn('Invalid or incomplete message format:', row.message);
+        parsedMessage = {
+          sender: 'ai',
+          text: 'Incomplete message data.',
+          timestamp: row.timestamp.toISOString(),
+        };
+      }
+
+      return parsedMessage;
+    });
+
+    console.log('Formatted Messages to Send to Frontend:', messages);
+
+    res.status(200).json(messages);
   } catch (error) {
     console.error('Error fetching chat messages:', error);
-    res.status(500).json({ error: 'Internal server error' });
-  }
-});
-
-/**
- * PUT /api/messages/:id
- * Update a chat message
- */
-router.put('/messages/:id', async (req: Request, res: Response): Promise<void> => {
-  const { id } = req.params;
-  const { message } = req.body;
-
-  // Validate request payload
-  if (!message || !message.sender || !message.text) {
-    res.status(400).json({ error: 'Invalid request payload' });
-    return;
-  }
-
-  try {
-    const result = await pool.query(
-      'UPDATE n8n_chat_histories SET message = $1 WHERE id = $2',
-      [message, id]
-    );
-
-    if (result.rowCount === 0) {
-      res.status(404).json({ error: 'Message not found' });
-      return;
-    }
-
-    res.status(200).json({ message: 'Chat message updated successfully' });
-  } catch (error) {
-    console.error('Error updating chat message:', error);
-    res.status(500).json({ error: 'Internal server error' });
-  }
-});
-
-/**
- * DELETE /api/messages/:id
- * Delete a chat message
- */
-router.delete('/messages/:id', async (req: Request, res: Response): Promise<void> => {
-  const { id } = req.params;
-
-  try {
-    const result = await pool.query('DELETE FROM n8n_chat_histories WHERE id = $1', [id]);
-
-    if (result.rowCount === 0) {
-      res.status(404).json({ error: 'Message not found' });
-      return;
-    }
-
-    res.status(200).json({ message: 'Chat message deleted successfully' });
-  } catch (error) {
-    console.error('Error deleting chat message:', error);
     res.status(500).json({ error: 'Internal server error' });
   }
 });

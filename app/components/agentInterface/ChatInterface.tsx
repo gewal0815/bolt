@@ -27,7 +27,19 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ onClose }) => {
   const [isDarkMode, setIsDarkMode] = useState(false);
   const messageEndRef = useRef<HTMLDivElement>(null);
   const chatRef = useRef<HTMLDivElement>(null);
-  const [sessionId] = useState<string>(() => uuidv4());
+
+  // Persist sessionId in localStorage
+  const [sessionId] = useState<string>(() => {
+    const storedSessionId = localStorage.getItem('sessionId');
+    if (storedSessionId) {
+      return storedSessionId;
+    } else {
+      const newSessionId = uuidv4();
+      localStorage.setItem('sessionId', newSessionId);
+      return newSessionId;
+    }
+  });
+
   const [position, setPosition] = useState<{ x: number; y: number }>(() => {
     const savedPosition = localStorage.getItem('chatPosition');
     return savedPosition ? JSON.parse(savedPosition) : { x: 0, y: 0 };
@@ -40,6 +52,31 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ onClose }) => {
       setPosition({ x: initialX, y: initialY });
     }
   }, []);
+
+  useEffect(() => {
+    // Fetch message history on component mount
+    const fetchMessageHistory = async () => {
+      try {
+        const response = await fetch(`http://localhost:5000/api/messages?session_id=${sessionId}&time_period=1 month`, {
+          method: 'GET',
+          headers: { 'Content-Type': 'application/json' },
+        });
+
+        if (!response.ok) {
+          throw new Error(`Backend GET error: ${response.statusText}`);
+        }
+
+        const data: Message[] = await response.json();
+        setMessages(data);
+        console.log('Message History:', data);
+      } catch (error) {
+        console.error('Error fetching message history:', error);
+        // Optionally, notify the user about the fetch failure
+      }
+    };
+
+    fetchMessageHistory();
+  }, [sessionId]);
 
   useEffect(() => {
     messageEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -59,32 +96,20 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ onClose }) => {
     setIsLoading(true);
 
     try {
-      // Save user message to the backend
-      const response = await fetch('http://localhost:5000/api/messages', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          session_id: sessionId,
-          message: userMessage,
-        }),
-      });
+      console.log('User Message:', userMessage);
 
-      if (!response.ok) throw new Error(`Backend Save error: ${response.statusText}`);
-
-      // Fetch and save AI response
+      // Fetch and display AI response
       await getAIResponse(inputValue);
     } catch (error) {
-      console.error('Error saving user message:', error);
+      console.error('Error processing user message:', error);
       setIsLoading(false);
-      // Optionally, notify the user about the save failure
+      // Optionally, notify the user about the processing failure
     }
   };
 
-
   const getAIResponse = async (chatInput: string) => {
     try {
-      // Fetch AI response from webhook
-      const response = await fetch('http://localhost:5678/webhook/9ba11544-5c4e-4f91-818a-08a4ecb596c5', {
+      const response = await fetch('http://localhost:5678/webhook/e4498659-6af2-480b-9578-0382d998f73a', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ input: { sessionId: sessionId, chatInput: chatInput } }),
@@ -99,21 +124,7 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ onClose }) => {
       };
       setMessages((prev) => [...prev, aiMessage]);
 
-      // Save AI message to the backend
-      try {
-        const saveResponse = await fetch('http://localhost:5000/api/messages', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            session_id: sessionId,
-            message: aiMessage,
-          }),
-        });
-        if (!saveResponse.ok) throw new Error(`Backend Save error: ${saveResponse.statusText}`);
-      } catch (saveError) {
-        console.error('Error saving AI message:', saveError);
-        // Optionally, notify the user about the save failure
-      }
+      console.log('AI Message:', aiMessage);
     } catch (error) {
       console.error('Error fetching AI response:', error);
       setMessages((prev) => [
@@ -128,7 +139,6 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ onClose }) => {
       setIsLoading(false);
     }
   };
-
 
   const handleInputChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     setInputValue(e.target.value);
@@ -152,6 +162,12 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ onClose }) => {
   };
 
   const renderMessage = (message: Message) => {
+    console.log('Rendering Message:', message);
+
+    if (!message.text || !message.sender) {
+      return <span style={{ color: 'red' }}>Invalid message data.</span>;
+    }
+
     const parts = parseMessageText(message.text);
 
     return parts.map((part, index) => {
@@ -175,6 +191,10 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ onClose }) => {
   };
 
   const parseMessageText = (text: string) => {
+    if (!text) {
+      return [{ type: 'text', content: 'No message content available.' }];
+    }
+
     const regex = /```(\w+)?\n([\s\S]+?)```/g;
     let match;
     let lastIndex = 0;
@@ -229,7 +249,7 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ onClose }) => {
               className={`chat-message ${message.sender === 'user' ? 'chat-message-user' : 'chat-message-ai'}`}
             >
               <div>{renderMessage(message)}</div>
-              <div className="chat-message-timestamp">{message.timestamp}</div>
+              <div className="chat-message-timestamp">{new Date(message.timestamp).toLocaleString()}</div>
             </div>
           ))}
           {isLoading && <div className="chat-loading-indicator">Loading...</div>}
@@ -275,7 +295,7 @@ const CodeBlockWithCopy: React.FC<CodeBlockWithCopyProps> = ({ code, language, i
   };
 
   return (
-    <div className="code-block-container">
+    <div className="code-block-container" style={{ position: 'relative' }}>
       <SyntaxHighlighter
         language={language}
         style={isDarkMode ? darcula : materialLight}
@@ -289,8 +309,6 @@ const CodeBlockWithCopy: React.FC<CodeBlockWithCopyProps> = ({ code, language, i
           boxShadow: '0px 8px 16px rgba(0, 0, 0, 0.3)',
           backdropFilter: 'blur(10px)',
         }}
-
-
       >
         {code}
       </SyntaxHighlighter>
@@ -299,6 +317,15 @@ const CodeBlockWithCopy: React.FC<CodeBlockWithCopyProps> = ({ code, language, i
           onClick={handleCopyCode}
           className="copy-code-button"
           aria-label="Copy code"
+          style={{
+            position: 'absolute',
+            top: '10px',
+            right: '10px',
+            background: 'transparent',
+            border: 'none',
+            cursor: 'pointer',
+            color: isDarkMode ? '#fff' : '#000',
+          }}
         >
           <ContentCopyIcon fontSize="small" />
         </button>
