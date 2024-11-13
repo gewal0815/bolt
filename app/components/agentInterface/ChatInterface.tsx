@@ -5,14 +5,17 @@ import Draggable, { DraggableData, DraggableEvent } from 'react-draggable';
 import { v4 as uuidv4 } from 'uuid';
 import Switch from '@mui/material/Switch';
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
-import { darcula } from 'react-syntax-highlighter/dist/esm/styles/prism'; // Dark theme for code blocks
-import { materialLight } from 'react-syntax-highlighter/dist/esm/styles/prism'; // Light theme for code blocks
-import ContentCopyIcon from '@mui/icons-material/ContentCopy'; // Import copy icon
-import Tooltip from '@mui/material/Tooltip'; // Import Tooltip for copy feedback
-import DragIndicatorIcon from '@mui/icons-material/DragIndicator'; // Import drag handle icon
-import RestoreIcon from '@mui/icons-material/Restore'; // Import reset icon
-import InsertPhotoIcon from '@mui/icons-material/InsertPhoto'; // Placeholder icon 1
-import InsertEmoticonIcon from '@mui/icons-material/InsertEmoticon'; // Placeholder icon 2
+import { darcula, materialLight } from 'react-syntax-highlighter/dist/esm/styles/prism';
+import ContentCopyIcon from '@mui/icons-material/ContentCopy';
+import Tooltip from '@mui/material/Tooltip';
+import DragIndicatorIcon from '@mui/icons-material/DragIndicator';
+import RestoreIcon from '@mui/icons-material/Restore';
+import InsertPhotoIcon from '@mui/icons-material/InsertPhoto';
+import InsertEmoticonIcon from '@mui/icons-material/InsertEmoticon';
+import SendIcon from '@mui/icons-material/Send';
+import DeleteIcon from '@mui/icons-material/Delete';
+import CheckBoxIcon from '@mui/icons-material/CheckBox';
+import CheckBoxOutlineBlankIcon from '@mui/icons-material/CheckBoxOutlineBlank';
 
 interface Message {
   id: string;
@@ -33,6 +36,7 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ onClose }) => {
   const [aiResponseWidth, setAiResponseWidth] = useState<number>(60); // Initial width percentage
   const originalWidth = 60; // Original width before resizing
   const [showResetButton, setShowResetButton] = useState<boolean>(false);
+  const [selectedCodeBlocks, setSelectedCodeBlocks] = useState<string[]>([]); // Tracks selected code blocks
   const messageEndRef = useRef<HTMLDivElement>(null);
   const chatRef = useRef<HTMLDivElement>(null);
   const [position, setPosition] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
@@ -189,6 +193,61 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ onClose }) => {
     setShowResetButton(false);
   };
 
+  const toggleCodeBlockSelection = (id: string) => {
+    setSelectedCodeBlocks((prev) => {
+      if (prev.includes(id)) {
+        return prev.filter((blockId) => blockId !== id);
+      } else {
+        return [...prev, id];
+      }
+    });
+  };
+
+  const handleSubmitSelected = () => {
+    const selectedCodeBlocksData = [];
+
+    messages.forEach((msg) => {
+      const parts = parseMessageText(msg.text);
+      parts.forEach((part) => {
+        if (part.type === 'code' && selectedCodeBlocks.includes(part.id)) {
+          selectedCodeBlocksData.push({
+            messageId: msg.id,
+            codeBlockId: part.id,
+            language: part.language,
+            content: part.content,
+          });
+        }
+      });
+    });
+
+    console.log('Submitting selected code blocks:', selectedCodeBlocksData);
+    // Implement actual submission logic here
+  };
+
+  const handleDeleteSelected = () => {
+    setMessages((prevMessages) =>
+      prevMessages.map((msg) => {
+        const parts = parseMessageText(msg.text);
+        const filteredParts = parts.filter(
+          (part) => !(part.type === 'code' && selectedCodeBlocks.includes(part.id))
+        );
+        const newText = filteredParts
+          .map((part) => {
+            if (part.type === 'code') {
+              return `\`\`\`${part.language}\n${part.content}\`\`\``;
+            } else {
+              return part.content;
+            }
+          })
+          .join('');
+        return { ...msg, text: newText };
+      })
+    );
+    setSelectedCodeBlocks([]);
+    console.log('Deleted selected code blocks.');
+    // Optionally, implement backend deletion logic here
+  };
+
   // Render individual message
   const renderMessage = (message: Message) => {
     if (!message.text || !message.sender) {
@@ -201,10 +260,14 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ onClose }) => {
       if (part.type === 'code') {
         return (
           <CodeBlockWithCopy
-            key={index}
+            key={part.id}
+            id={part.id}
             code={part.content}
             language={part.language}
             isDarkMode={isDarkMode}
+            isSelected={selectedCodeBlocks.includes(part.id)}
+            onSelect={() => toggleCodeBlockSelection(part.id)}
+            onDelete={() => handleDeleteCodeBlock(part.id)}
           />
         );
       } else {
@@ -239,6 +302,7 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ onClose }) => {
 
       result.push({
         type: 'code',
+        id: uuidv4(), // Assign a unique ID to each code block
         language: match[1] || 'text',
         content: match[2],
       });
@@ -257,12 +321,35 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ onClose }) => {
     return result;
   };
 
+  const handleDeleteCodeBlock = (id: string) => {
+    setMessages((prevMessages) =>
+      prevMessages.map((msg) => {
+        const parts = parseMessageText(msg.text);
+        const filteredParts = parts.filter(
+          (part) => !(part.type === 'code' && part.id === id)
+        );
+        const newText = filteredParts
+          .map((part) => {
+            if (part.type === 'code') {
+              return `\`\`\`${part.language}\n${part.content}\`\`\``;
+            } else {
+              return part.content;
+            }
+          })
+          .join('');
+        return { ...msg, text: newText };
+      })
+    );
+    // Remove the code block ID from selectedCodeBlocks
+    setSelectedCodeBlocks((prev) => prev.filter((blockId) => blockId !== id));
+  };
+
   return (
     <Draggable handle=".chat-header" position={position} onDrag={handleDrag} nodeRef={chatRef}>
       <div
         className={`chat-interface ${isDarkMode ? 'dark-mode' : 'light-mode'} ${
           showResetButton ? 'show-reset' : ''
-        }`}
+        } ${selectedCodeBlocks.length > 0 ? 'has-selection' : ''}`}
         ref={chatRef}
       >
         {/* Chat Header */}
@@ -322,6 +409,9 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ onClose }) => {
           isDarkMode={isDarkMode}
           showResetButton={showResetButton}
           onReset={resetAIResponseWidth}
+          selectedCount={selectedCodeBlocks.length}
+          onSubmit={handleSubmitSelected}
+          onDeleteSelected={handleDeleteSelected} // Pass the prop here
         />
       </div>
     </Draggable>
@@ -329,14 +419,25 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ onClose }) => {
 };
 
 interface CodeBlockWithCopyProps {
+  id: string; // Unique identifier for the code block
   code: string;
   language: string;
   isDarkMode: boolean;
+  isSelected: boolean;
+  onSelect: () => void;
+  onDelete: () => void;
 }
 
-const CodeBlockWithCopy: React.FC<CodeBlockWithCopyProps> = ({ code, language, isDarkMode }) => {
+const CodeBlockWithCopy: React.FC<CodeBlockWithCopyProps> = ({
+  id,
+  code,
+  language,
+  isDarkMode,
+  isSelected,
+  onSelect,
+  onDelete,
+}) => {
   const [copySuccess, setCopySuccess] = useState(false);
-  const [isSelected, setIsSelected] = useState(false);
 
   const handleCopyCode = (e: React.MouseEvent<HTMLButtonElement>) => {
     e.preventDefault(); // Prevent default behavior
@@ -353,20 +454,16 @@ const CodeBlockWithCopy: React.FC<CodeBlockWithCopyProps> = ({ code, language, i
 
   const handleSelectCode = (e: React.MouseEvent<HTMLButtonElement>) => {
     e.preventDefault();
-    setIsSelected((prev) => !prev);
+    onSelect();
   };
 
   const handleDeleteCode = (e: React.MouseEvent<HTMLButtonElement>) => {
     e.preventDefault();
-    // Placeholder for delete functionality
-    // You can emit an event or call a prop function to handle deletion
-    console.log('Delete code snippet:', code);
-    // Reset selection after deletion
-    setIsSelected(false);
+    onDelete();
   };
 
   return (
-    <div className="code-block-container" style={{ position: 'relative' }}>
+    <div className={`code-block-container ${isSelected ? 'selected' : ''}`}>
       <SyntaxHighlighter
         language={language}
         style={isDarkMode ? darcula : materialLight}
@@ -376,7 +473,7 @@ const CodeBlockWithCopy: React.FC<CodeBlockWithCopyProps> = ({ code, language, i
           padding: '15px',
           fontSize: '16px',
           backgroundColor: isDarkMode ? 'rgba(255, 255, 255, 0.05)' : 'rgba(255, 255, 255, 0.7)',
-          border: isDarkMode ? '1px solid rgba(255, 255, 255, 0.2)' : '1px solid rgba(0, 0, 0, 0.1)',
+          border: isSelected ? '2px solid green' : '1px solid rgba(0, 0, 0, 0.1)',
           boxShadow: '0px 8px 16px rgba(0, 0, 0, 0.3)',
           backdropFilter: 'blur(10px)',
         }}
@@ -384,21 +481,20 @@ const CodeBlockWithCopy: React.FC<CodeBlockWithCopyProps> = ({ code, language, i
         {code}
       </SyntaxHighlighter>
 
-      {/* Buttons Container */}
-      <div className="code-block-buttons">
+      {/* Top Buttons Container */}
+      <div className="code-block-buttons-top">
         {/* Select Button */}
         <Tooltip title={isSelected ? 'Deselect' : 'Select'} placement="top" arrow>
-          <button onClick={handleSelectCode} className="select-code-button" aria-label="Select code for deletion">
-            {/* Using a select icon, e.g., CheckBoxOutlineBlankIcon */}
-            <svg
-              xmlns="http://www.w3.org/2000/svg"
-              height="20px"
-              viewBox="0 0 24 24"
-              width="20px"
-              fill={isSelected ? '#1a73e8' : 'currentColor'}
-            >
-              <path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm-1 14l-5-5 1.41-1.41L18 16.17l-7.59-7.59L9 10l6 6z" />
-            </svg>
+          <button
+            onClick={handleSelectCode}
+            className={`select-code-button ${isSelected ? 'selected' : ''}`}
+            aria-label="Select code for submission"
+          >
+            {isSelected ? (
+              <CheckBoxIcon style={{ color: 'blue' }} />
+            ) : (
+              <CheckBoxOutlineBlankIcon style={{ color: 'blue' }} />
+            )}
           </button>
         </Tooltip>
 
@@ -410,23 +506,20 @@ const CodeBlockWithCopy: React.FC<CodeBlockWithCopyProps> = ({ code, language, i
         </Tooltip>
       </div>
 
-      {/* Delete Button - Visible Only When Selected */}
+      {/* Bottom Buttons Container */}
       {isSelected && (
-        <Tooltip title="Delete" placement="top" arrow>
-          <button onClick={handleDeleteCode} className="delete-code-button" aria-label="Delete code snippet">
-            {/* Using a delete icon, e.g., DeleteIcon */}
-            <svg
-              xmlns="http://www.w3.org/2000/svg"
-              height="20px"
-              viewBox="0 0 24 24"
-              width="20px"
-              fill="currentColor"
+        <div className="code-block-buttons-bottom">
+          {/* Delete Button */}
+          <Tooltip title="Delete" placement="left" arrow>
+            <button
+              onClick={handleDeleteCode}
+              className="delete-code-button"
+              aria-label="Delete code snippet"
             >
-              <path d="M0 0h24v24H0z" fill="none" />
-              <path d="M16 9v10H8V9h8m-1.5-6h-5l-1 1H5v2h14V4h-4.5l-1-1zM18 7H6v12c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7z" />
-            </svg>
-          </button>
-        </Tooltip>
+              <DeleteIcon />
+            </button>
+          </Tooltip>
+        </div>
       )}
     </div>
   );
@@ -438,6 +531,9 @@ interface ExtensionHandleProps {
   isDarkMode: boolean;
   showResetButton: boolean;
   onReset: () => void;
+  selectedCount: number;
+  onSubmit: () => void;
+  onDeleteSelected: () => void; // Added prop
 }
 
 const ExtensionHandle: React.FC<ExtensionHandleProps> = ({
@@ -445,6 +541,9 @@ const ExtensionHandle: React.FC<ExtensionHandleProps> = ({
   isDarkMode,
   showResetButton,
   onReset,
+  selectedCount,
+  onSubmit,
+  onDeleteSelected, // Destructure the new prop
 }) => {
   const [isDragging, setIsDragging] = useState(false);
   const [startX, setStartX] = useState<number | null>(null);
@@ -494,19 +593,21 @@ const ExtensionHandle: React.FC<ExtensionHandleProps> = ({
 
   return (
     <div className="extension-handle-container">
-      {/* Reset Button with Tooltip */}
-      <Tooltip title="Reset to Default" placement="left" arrow>
-        <button
-          className="reset-width-button"
-          onClick={onReset}
-          aria-label="Reset AI Response Width"
-        >
-          <RestoreIcon />
-        </button>
-      </Tooltip>
-
       {/* Drag Label */}
       <span className="extension-handle-label">Drag</span>
+
+      {/* Reset Button with Tooltip */}
+      {showResetButton && (
+        <Tooltip title="Reset to Default" placement="left" arrow>
+          <button
+            className="reset-width-button"
+            onClick={onReset}
+            aria-label="Reset AI Response Width"
+          >
+            <RestoreIcon />
+          </button>
+        </Tooltip>
+      )}
 
       {/* Drag Indicator with Tooltip */}
       <Tooltip title="Drag to Resize" placement="left" arrow>
@@ -523,16 +624,45 @@ const ExtensionHandle: React.FC<ExtensionHandleProps> = ({
       <div className="extension-handle-grey-line"></div>
 
       {/* Placeholder Icons with Tooltips */}
-      <Tooltip title="Placeholder 1" placement="left" arrow>
-        <button className="placeholder-button" aria-label="Placeholder 1">
+      <Tooltip title="Insert Image" placement="left" arrow>
+        <button className="placeholder-button" aria-label="Insert Image">
           <InsertPhotoIcon />
         </button>
       </Tooltip>
-      <Tooltip title="Placeholder 2" placement="left" arrow>
-        <button className="placeholder-button" aria-label="Placeholder 2">
+      <Tooltip title="Insert Emoji" placement="left" arrow>
+        <button className="placeholder-button" aria-label="Insert Emoji">
           <InsertEmoticonIcon />
         </button>
       </Tooltip>
+
+      {/* Grey Line Under Placeholders */}
+      <div className="extension-handle-grey-line-bottom"></div>
+
+      {/* Submit Button with Tooltip - Visible when selectedCount > 0 */}
+      {selectedCount > 0 && (
+        <Tooltip title="Submit selected code blocks" placement="left" arrow>
+          <button
+            className="submit-button"
+            onClick={onSubmit}
+            aria-label="Submit selected code blocks"
+          >
+            <SendIcon />
+          </button>
+        </Tooltip>
+      )}
+
+      {/* Delete Selected Button */}
+      {selectedCount > 0 && (
+        <Tooltip title="Delete selected code blocks" placement="left" arrow>
+          <button
+            className="delete-code-button"
+            onClick={onDeleteSelected} // Use the prop here
+            aria-label="Delete selected code blocks"
+          >
+            <DeleteIcon />
+          </button>
+        </Tooltip>
+      )}
     </div>
   );
 };

@@ -1,6 +1,6 @@
 /* ChatInterface.scss */
 
-/* Define CSS Variables for Consistent Theming */
+/* Root Variables for Consistent Theming */
 :root {
   /* Color Palette */
   --color-primary: #1a73e8;        /* Professional Blue */
@@ -38,6 +38,7 @@
   --border-radius-small: 4px;
 }
 
+/* Chat Interface Container */
 .chat-interface {
   width: 50vw;
   height: 70vh;
@@ -49,7 +50,7 @@
   flex-direction: column;
   font-family: var(--font-family);
   overflow: hidden;
-  position: relative; /* Changed from absolute to relative */
+  position: relative;
   border: 1px solid var(--color-border-light);
   background-color: var(--color-background-light);
   color: var(--color-text-light);
@@ -61,11 +62,11 @@
   &.show-reset .reset-width-button {
     display: flex;
   }
-}
 
-/* Close Button Styles */
-.chat-interface .chat-header .chat-close-button {
-  user-select: none; /* Prevents text selection only on the close button */
+  /* Show Submit Button When Needed */
+  &.has-selection .submit-button {
+    display: flex;
+  }
 }
 
 /* Dark Mode Styling */
@@ -120,7 +121,7 @@
 
   /* Close Button Styling in Dark Mode */
   .chat-close-button {
-    background: transparent; /* Ensure transparent background */
+    background: transparent;
     color: var(--color-text-dark);
     padding: 5px;
     border-radius: 50%;
@@ -129,6 +130,12 @@
     &:hover {
       background-color: rgba(255, 255, 255, 0.1);
     }
+  }
+
+  /* Code Block Container Styling for Dark Mode */
+  .code-block-container {
+    background-color: #2e3440;
+    border: 1px solid #3c3c3c;
   }
 }
 
@@ -184,7 +191,7 @@
 
   /* Close Button Styling in Light Mode */
   .chat-close-button {
-    background: transparent; /* Ensure transparent background */
+    background: transparent;
     color: var(--color-text-light);
     padding: 5px;
     border-radius: 50%;
@@ -193,6 +200,12 @@
     &:hover {
       background-color: rgba(0, 0, 0, 0.05);
     }
+  }
+
+  /* Code Block Container Styling for Light Mode */
+  .code-block-container {
+    background-color: #f5f5f5;
+    border: 1px solid #e0e0e0;
   }
 }
 
@@ -251,7 +264,7 @@
   position: relative;
   word-wrap: break-word;
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
-  user-select: text; /* Allows text selection in chat messages */
+  user-select: text;
 
   &-user {
     background-color: var(--color-primary);
@@ -286,80 +299,93 @@
 .code-block-container {
   position: relative;
   margin-top: var(--spacing-small);
-  background-color: var(--color-secondary); /* Light blue background for light mode */
+  background-color: var(--color-secondary);
   border-radius: var(--border-radius-small);
   padding: var(--spacing-small);
+  padding-top: 40px; /* Added to prevent overlap with buttons */
 }
 
-/* Adjust styles for dark and light modes */
-.chat-interface.light-mode .code-block-container {
-  background-color: #f5f5f5; /* Lighter background for light mode */
-}
-
-.chat-interface.dark-mode .code-block-container {
-  background-color: #2e3440; /* Darker background for dark mode */
-}
-
-/* Code Block Buttons Container */
-.code-block-buttons {
+/* Top Buttons Container */
+.code-block-buttons-top {
   position: absolute;
   top: 10px;
   right: 10px;
   display: flex;
-  gap: 8px;
+  gap: 6px;
+  align-items: center;
 }
 
-/* Copy and Select Buttons in Code Block */
-.copy-code-button,
-.select-code-button {
-  background: transparent;
+/* Bottom Buttons Container */
+.code-block-buttons-bottom {
+  position: absolute;
+  bottom: 10px;
+  left: 10px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+/* Select and Copy Buttons in Code Block */
+.select-code-button,
+.copy-code-button {
+  background: rgba(0, 0, 0, 0.05);
   border: none;
   cursor: pointer;
   color: inherit;
-  padding: 5px;
+  padding: 6px;
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 24px; /* Ensures same size as icons */
-  height: 24px; /* Ensures same size as icons */
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  transition: background-color 0.3s, transform 0.2s;
 
   &:focus {
     outline: none;
+    box-shadow: 0 0 0 2px var(--color-primary);
   }
 
   &:hover {
-    opacity: 0.8;
+    background-color: rgba(0, 0, 0, 0.1);
+    transform: scale(1.05);
   }
 
   svg {
     width: 20px;
     height: 20px;
+    fill: currentColor;
   }
 }
 
 /* Delete Button in Code Block */
 .delete-code-button {
-  position: absolute;
-  top: 10px;
-  right: 10px;
-  background: transparent;
-  border: none;
-  cursor: pointer;
-  color: #ff4d4d; /* Red color for delete */
-  padding: 5px;
-  display: none; /* Initially hidden */
+  background: rgba(255, 0, 0, 0.1);
+  color: #ff4d4d;
+  padding: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  transition: background-color 0.3s, transform 0.2s;
+  margin-top: 8px; /* Added margin-top to prevent overlapping */
 
   &:focus {
     outline: none;
+    box-shadow: 0 0 0 2px rgba(255, 77, 77, 0.5);
   }
 
   &:hover {
-    opacity: 0.8;
+    background-color: rgba(255, 0, 0, 0.2);
+    transform: scale(1.05);
   }
 
   svg {
     width: 20px;
     height: 20px;
+    fill: currentColor;
   }
 }
 
@@ -367,7 +393,7 @@
 .chat-input-area {
   display: flex;
   align-items: center;
-  padding: var(--spacing-medium) 30px var(--spacing-medium) var(--spacing-medium); /* Added 30px right padding */
+  padding: var(--spacing-medium) 30px var(--spacing-medium) var(--spacing-medium);
   border-top: 1px solid rgba(0, 0, 0, 0.1);
   background-color: var(--color-secondary);
   transition: background-color 0.3s, border-color 0.3s;
@@ -464,38 +490,47 @@
   align-items: center;
   padding: 5px;
   background: transparent;
-  z-index: 10; /* Ensure it's above other elements */
+  z-index: 10;
 }
 
+/* Submit Button */
+.submit-button {
+  background: var(--color-accent);
+  border: none;
+  cursor: pointer;
+  color: #ffffff;
+  padding: 6px;
+  display: none; /* Initially hidden */
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  transition: background-color 0.3s, transform 0.2s;
+  margin-top: 10px; /* Space above the button */
+
+  &:focus {
+    outline: none;
+    box-shadow: 0 0 0 2px var(--color-primary);
+  }
+
+  &:hover {
+    background-color: #2c8a3e; /* Slightly darker green */
+    transform: scale(1.05);
+  }
+
+  svg {
+    width: 20px;
+    height: 20px;
+    fill: currentColor;
+  }
+}
+
+/* Drag Label */
 .extension-handle-label {
   font-size: 14px;
   color: #666666;
   margin-bottom: 5px;
-}
-
-/* Drag Indicator Button */
-.extension-handle-button {
-  background: transparent;
-  border: none;
-  cursor: ew-resize; /* Indicates horizontal resize */
-  padding: 10px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 48px; /* Increased size */
-  height: 48px; /* Increased size */
-  border-radius: 6px; /* Slight rounding for aesthetics */
-  transition: background-color 0.3s;
-
-  &:hover {
-    background-color: rgba(0, 0, 0, 0.1);
-  }
-
-  svg {
-    fill: currentColor;
-    width: 24px; /* Increased icon size */
-    height: 24px; /* Increased icon size */
-  }
 }
 
 /* Reset Button */
@@ -503,29 +538,57 @@
   background: transparent;
   border: none;
   cursor: pointer;
-  padding: 10px;
-  display: flex;
+  padding: 6px;
+  display: none; /* Initially hidden */
   align-items: center;
   justify-content: center;
-  width: 48px; /* Increased size */
-  height: 48px; /* Increased size */
-  border-radius: 6px; /* Slight rounding for aesthetics */
-  transition: background-color 0.3s;
-  margin-bottom: 10px; /* Space between reset button and drag label */
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  transition: background-color 0.3s, transform 0.2s;
+  margin-top: 5px; /* Position it under the label */
 
   &:hover {
     background-color: rgba(0, 0, 0, 0.1);
+    transform: scale(1.05);
+  }
+
+  svg {
+    width: 20px;
+    height: 20px;
+    fill: currentColor;
+  }
+}
+
+/* Drag Indicator Button */
+.extension-handle-button {
+  background: transparent;
+  border: none;
+  cursor: ew-resize;
+  padding: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  transition: background-color 0.3s, transform 0.2s;
+
+  &:hover {
+    background-color: rgba(0, 0, 0, 0.1);
+    transform: scale(1.05);
   }
 
   svg {
     fill: currentColor;
-    width: 24px; /* Increased icon size */
-    height: 24px; /* Increased icon size */
+    width: 20px;
+    height: 20px;
   }
 }
 
 /* Grey Line */
-.extension-handle-grey-line {
+.extension-handle-grey-line,
+.extension-handle-grey-line-bottom {
   width: 40px;
   height: 1px;
   background-color: #cccccc;
@@ -534,32 +597,89 @@
 
 /* Placeholder Icons */
 .placeholder-button {
-  background: transparent;
+  background: rgba(0, 0, 0, 0.05);
   border: none;
   cursor: pointer;
-  padding: 5px;
+  color: inherit;
+  padding: 6px;
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 24px; /* Adjusted size to match other buttons */
-  height: 24px; /* Adjusted size to match other buttons */
-  border-radius: 6px; /* Slight rounding for aesthetics */
-  transition: background-color 0.3s;
-  margin-bottom: 5px; /* Space between placeholders */
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  transition: background-color 0.3s, transform 0.2s;
+  margin-bottom: 5px;
+
+  &:focus {
+    outline: none;
+    box-shadow: 0 0 0 2px var(--color-primary);
+  }
 
   &:hover {
     background-color: rgba(0, 0, 0, 0.1);
+    transform: scale(1.05);
   }
 
   svg {
+    width: 20px;
+    height: 20px;
     fill: currentColor;
-    width: 20px; /* Adjusted icon size */
-    height: 20px; /* Adjusted icon size */
   }
+}
+
+/* Delete Button Styling */
+.delete-code-button {
+  background: rgba(255, 0, 0, 0.1);
+  color: #ff4d4d;
+  padding: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  transition: background-color 0.3s, transform 0.2s;
+  margin-top: 8px; /* Added margin-top to prevent overlapping */
+
+  &:focus {
+    outline: none;
+    box-shadow: 0 0 0 2px rgba(255, 77, 77, 0.5);
+  }
+
+  &:hover {
+    background-color: rgba(255, 0, 0, 0.2);
+    transform: scale(1.05);
+  }
+
+  svg {
+    width: 20px;
+    height: 20px;
+    fill: currentColor;
+  }
+}
+
+/* Extension Handle Container */
+.extension-handle-container {
+  position: absolute;
+  top: 50%;
+  right: 0;
+  transform: translateY(-50%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 5px;
+  background: transparent;
+  z-index: 10;
 }
 
 /* Show Reset Button When Needed */
 .chat-interface.show-reset .reset-width-button {
+  display: flex;
+}
+
+/* Show Submit Button When Needed */
+.chat-interface.has-selection .submit-button {
   display: flex;
 }
 
@@ -606,7 +726,9 @@
   /* Adjust extension handle and buttons for smaller screens */
   .extension-handle-button,
   .reset-width-button,
-  .placeholder-button {
+  .placeholder-button,
+  .submit-button,
+  .delete-code-button {
     width: 40px;
     height: 40px;
 
@@ -616,7 +738,43 @@
     }
   }
 
-  .extension-handle-grey-line {
+  .extension-handle-grey-line,
+  .extension-handle-grey-line-bottom {
     width: 30px;
   }
+}
+
+/* Code Block Container when Selected */
+.code-block-container.selected {
+  border: 2px solid green; /* Green border around code block container */
+}
+
+/* Select Button Icon Color */
+.select-code-button {
+  svg {
+    color: blue;
+  }
+
+  &.selected svg {
+    color: #006400; /* Darker green color when selected */
+  }
+}
+
+/* Ensure Buttons are Positioned Correctly */
+.code-block-buttons-top {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  position: absolute;
+  top: 10px;
+  right: 10px;
+}
+
+.code-block-buttons-bottom {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  position: absolute;
+  bottom: 10px;
+  left: 10px;
 }
