@@ -14,8 +14,7 @@ import InsertPhotoIcon from '@mui/icons-material/InsertPhoto';
 import InsertEmoticonIcon from '@mui/icons-material/InsertEmoticon';
 import SendIcon from '@mui/icons-material/Send';
 import DeleteIcon from '@mui/icons-material/Delete';
-import CheckBoxIcon from '@mui/icons-material/CheckBox';
-import CheckBoxOutlineBlankIcon from '@mui/icons-material/CheckBoxOutlineBlank';
+import BookmarkAddedIcon from '@mui/icons-material/BookmarkAdded';
 
 interface Message {
   id: string;
@@ -371,7 +370,14 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ onClose }) => {
               key={message.id}
               className={`chat-message ${
                 message.sender === 'user' ? 'chat-message-user' : 'chat-message-ai'
-              } ${message.sender === 'ai' && showResetButton ? 'extended' : ''}`}
+              } ${message.sender === 'ai' && showResetButton ? 'extended' : ''} ${
+                selectedCodeBlocks.length > 0 &&
+                parseMessageText(message.text).some(
+                  (part) => part.type === 'code' && selectedCodeBlocks.includes(part.id)
+                )
+                  ? 'selected'
+                  : ''
+              }`}
               style={
                 message.sender === 'ai'
                   ? { maxWidth: `${aiResponseWidth}%` }
@@ -490,11 +496,7 @@ const CodeBlockWithCopy: React.FC<CodeBlockWithCopyProps> = ({
             className={`select-code-button ${isSelected ? 'selected' : ''}`}
             aria-label="Select code for submission"
           >
-            {isSelected ? (
-              <CheckBoxIcon style={{ color: 'blue' }} />
-            ) : (
-              <CheckBoxOutlineBlankIcon style={{ color: 'blue' }} />
-            )}
+            <BookmarkAddedIcon />
           </button>
         </Tooltip>
 
@@ -651,12 +653,12 @@ const ExtensionHandle: React.FC<ExtensionHandleProps> = ({
         </Tooltip>
       )}
 
-      {/* Delete Selected Button */}
+      {/* Delete Selected Button with Tooltip */}
       {selectedCount > 0 && (
         <Tooltip title="Delete selected code blocks" placement="left" arrow>
           <button
-            className="delete-code-button"
-            onClick={onDeleteSelected} // Use the prop here
+            className="delete-selected-button"
+            onClick={onDeleteSelected}
             aria-label="Delete selected code blocks"
           >
             <DeleteIcon />
