@@ -16,11 +16,19 @@ import SendIcon from '@mui/icons-material/Send';
 import DeleteIcon from '@mui/icons-material/Delete';
 import BookmarkAddedIcon from '@mui/icons-material/BookmarkAdded';
 
+interface Part {
+  type: 'text' | 'code';
+  id: string;
+  content: string;
+  language?: string;
+}
+
 interface Message {
   id: string;
   sender: 'user' | 'ai';
   text: string;
   timestamp: string;
+  parts: Part[];
 }
 
 interface ChatInterfaceProps {
@@ -32,10 +40,10 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ onClose }) => {
   const [inputValue, setInputValue] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [isDarkMode, setIsDarkMode] = useState(false);
-  const [aiResponseWidth, setAiResponseWidth] = useState<number>(60); // Initial width percentage
-  const originalWidth = 60; // Original width before resizing
+  const [aiResponseWidth, setAiResponseWidth] = useState<number>(60);
+  const originalWidth = 60;
   const [showResetButton, setShowResetButton] = useState<boolean>(false);
-  const [selectedCodeBlocks, setSelectedCodeBlocks] = useState<string[]>([]); // Tracks selected code blocks
+  const [selectedCodeBlocks, setSelectedCodeBlocks] = useState<string[]>([]);
   const messageEndRef = useRef<HTMLDivElement>(null);
   const chatRef = useRef<HTMLDivElement>(null);
   const [position, setPosition] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
@@ -54,7 +62,7 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ onClose }) => {
 
   useEffect(() => {
     if (!localStorage.getItem('chatPosition')) {
-      const initialX = (window.innerWidth - 400) / 2; // Approximate center
+      const initialX = (window.innerWidth - 400) / 2;
       const initialY = (window.innerHeight - 600) / 2;
       setPosition({ x: initialX, y: initialY });
     } else {
@@ -82,11 +90,16 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ onClose }) => {
         }
 
         const data: Message[] = await response.json();
-        setMessages(data);
-        console.log('Message History:', data);
+
+        // Parse and store parts
+        const messagesWithParts = data.map((msg) => ({
+          ...msg,
+          parts: parseMessageText(msg.text),
+        }));
+        setMessages(messagesWithParts);
+        console.log('Message History:', messagesWithParts);
       } catch (error) {
         console.error('Error fetching message history:', error);
-        // Optionally, notify the user about the fetch failure
       }
     };
 
@@ -105,6 +118,7 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ onClose }) => {
       sender: 'user',
       text: inputValue,
       timestamp: new Date().toISOString(),
+      parts: parseMessageText(inputValue),
     };
 
     setMessages((prev) => [...prev, userMessage]);
@@ -113,13 +127,10 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ onClose }) => {
 
     try {
       console.log('User Message:', userMessage);
-
-      // Fetch and display AI response
       await getAIResponse(inputValue);
     } catch (error) {
       console.error('Error processing user message:', error);
       setIsLoading(false);
-      // Optionally, notify the user about the processing failure
     }
   };
 
@@ -141,21 +152,21 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ onClose }) => {
         sender: 'ai',
         text: data.output || 'No response from AI.',
         timestamp: new Date().toISOString(),
+        parts: parseMessageText(data.output || 'No response from AI.'),
       };
       setMessages((prev) => [...prev, aiMessage]);
 
       console.log('AI Message:', aiMessage);
     } catch (error) {
       console.error('Error fetching AI response:', error);
-      setMessages((prev) => [
-        ...prev,
-        {
-          id: uuidv4(),
-          sender: 'ai',
-          text: 'Error processing your request.',
-          timestamp: new Date().toISOString(),
-        },
-      ]);
+      const errorMessage = {
+        id: uuidv4(),
+        sender: 'ai',
+        text: 'Error processing your request.',
+        timestamp: new Date().toISOString(),
+        parts: parseMessageText('Error processing your request.'),
+      };
+      setMessages((prev) => [...prev, errorMessage]);
     } finally {
       setIsLoading(false);
     }
@@ -206,8 +217,7 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ onClose }) => {
     const selectedCodeBlocksData = [];
 
     messages.forEach((msg) => {
-      const parts = parseMessageText(msg.text);
-      parts.forEach((part) => {
+      msg.parts.forEach((part) => {
         if (part.type === 'code' && selectedCodeBlocks.includes(part.id)) {
           selectedCodeBlocksData.push({
             messageId: msg.id,
@@ -226,8 +236,7 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ onClose }) => {
   const handleDeleteSelected = () => {
     setMessages((prevMessages) =>
       prevMessages.map((msg) => {
-        const parts = parseMessageText(msg.text);
-        const filteredParts = parts.filter(
+        const filteredParts = msg.parts.filter(
           (part) => !(part.type === 'code' && selectedCodeBlocks.includes(part.id))
         );
         const newText = filteredParts
@@ -239,7 +248,7 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ onClose }) => {
             }
           })
           .join('');
-        return { ...msg, text: newText };
+        return { ...msg, text: newText, parts: filteredParts };
       })
     );
     setSelectedCodeBlocks([]);
@@ -249,20 +258,18 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ onClose }) => {
 
   // Render individual message
   const renderMessage = (message: Message) => {
-    if (!message.text || !message.sender) {
+    if (!message.parts || !message.sender) {
       return <span style={{ color: 'red' }}>Invalid message data.</span>;
     }
 
-    const parts = parseMessageText(message.text);
-
-    return parts.map((part, index) => {
+    return message.parts.map((part) => {
       if (part.type === 'code') {
         return (
           <CodeBlockWithCopy
             key={part.id}
             id={part.id}
             code={part.content}
-            language={part.language}
+            language={part.language || 'text'}
             isDarkMode={isDarkMode}
             isSelected={selectedCodeBlocks.includes(part.id)}
             onSelect={() => toggleCodeBlockSelection(part.id)}
@@ -271,7 +278,7 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ onClose }) => {
         );
       } else {
         return (
-          <span key={index} style={{ whiteSpace: 'pre-wrap' }}>
+          <span key={part.id} style={{ whiteSpace: 'pre-wrap' }}>
             {part.content}
           </span>
         );
@@ -280,28 +287,29 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ onClose }) => {
   };
 
   // Parse message text to identify code blocks
-  const parseMessageText = (text: string) => {
+  const parseMessageText = (text: string): Part[] => {
     if (!text) {
-      return [{ type: 'text', content: 'No message content available.' }];
+      return [{ type: 'text', id: uuidv4(), content: 'No message content available.' }];
     }
 
     const regex = /```(\w+)?\n([\s\S]+?)```/g;
     let match;
     let lastIndex = 0;
-    const result = [];
+    const result: Part[] = [];
 
     while ((match = regex.exec(text)) !== null) {
       if (match.index > lastIndex) {
         // Add text before code block
         result.push({
           type: 'text',
+          id: uuidv4(),
           content: text.substring(lastIndex, match.index),
         });
       }
 
       result.push({
         type: 'code',
-        id: uuidv4(), // Assign a unique ID to each code block
+        id: uuidv4(),
         language: match[1] || 'text',
         content: match[2],
       });
@@ -313,6 +321,7 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ onClose }) => {
       // Add remaining text
       result.push({
         type: 'text',
+        id: uuidv4(),
         content: text.substring(lastIndex),
       });
     }
@@ -323,8 +332,7 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ onClose }) => {
   const handleDeleteCodeBlock = (id: string) => {
     setMessages((prevMessages) =>
       prevMessages.map((msg) => {
-        const parts = parseMessageText(msg.text);
-        const filteredParts = parts.filter(
+        const filteredParts = msg.parts.filter(
           (part) => !(part.type === 'code' && part.id === id)
         );
         const newText = filteredParts
@@ -336,7 +344,7 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ onClose }) => {
             }
           })
           .join('');
-        return { ...msg, text: newText };
+        return { ...msg, text: newText, parts: filteredParts };
       })
     );
     // Remove the code block ID from selectedCodeBlocks
@@ -370,19 +378,8 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ onClose }) => {
               key={message.id}
               className={`chat-message ${
                 message.sender === 'user' ? 'chat-message-user' : 'chat-message-ai'
-              } ${message.sender === 'ai' && showResetButton ? 'extended' : ''} ${
-                selectedCodeBlocks.length > 0 &&
-                parseMessageText(message.text).some(
-                  (part) => part.type === 'code' && selectedCodeBlocks.includes(part.id)
-                )
-                  ? 'selected'
-                  : ''
-              }`}
-              style={
-                message.sender === 'ai'
-                  ? { maxWidth: `${aiResponseWidth}%` }
-                  : {}
-              }
+              } ${message.sender === 'ai' && showResetButton ? 'extended' : ''}`}
+              style={message.sender === 'ai' ? { maxWidth: `${aiResponseWidth}%` } : {}}
             >
               <div>{renderMessage(message)}</div>
               <div className="chat-message-timestamp">
@@ -417,7 +414,7 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ onClose }) => {
           onReset={resetAIResponseWidth}
           selectedCount={selectedCodeBlocks.length}
           onSubmit={handleSubmitSelected}
-          onDeleteSelected={handleDeleteSelected} // Pass the prop here
+          onDeleteSelected={handleDeleteSelected}
         />
       </div>
     </Draggable>
@@ -425,7 +422,7 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ onClose }) => {
 };
 
 interface CodeBlockWithCopyProps {
-  id: string; // Unique identifier for the code block
+  id: string;
   code: string;
   language: string;
   isDarkMode: boolean;
@@ -446,11 +443,11 @@ const CodeBlockWithCopy: React.FC<CodeBlockWithCopyProps> = ({
   const [copySuccess, setCopySuccess] = useState(false);
 
   const handleCopyCode = (e: React.MouseEvent<HTMLButtonElement>) => {
-    e.preventDefault(); // Prevent default behavior
+    e.preventDefault();
     navigator.clipboard.writeText(code).then(
       () => {
         setCopySuccess(true);
-        setTimeout(() => setCopySuccess(false), 2000); // Clear message after 2 seconds
+        setTimeout(() => setCopySuccess(false), 2000);
       },
       (err) => {
         console.error('Could not copy text: ', err);
@@ -482,6 +479,8 @@ const CodeBlockWithCopy: React.FC<CodeBlockWithCopyProps> = ({
           border: isSelected ? '2px solid green' : '1px solid rgba(0, 0, 0, 0.1)',
           boxShadow: '0px 8px 16px rgba(0, 0, 0, 0.3)',
           backdropFilter: 'blur(10px)',
+          position: 'relative',
+          zIndex: 1,
         }}
       >
         {code}
@@ -535,7 +534,7 @@ interface ExtensionHandleProps {
   onReset: () => void;
   selectedCount: number;
   onSubmit: () => void;
-  onDeleteSelected: () => void; // Added prop
+  onDeleteSelected: () => void;
 }
 
 const ExtensionHandle: React.FC<ExtensionHandleProps> = ({
@@ -545,14 +544,14 @@ const ExtensionHandle: React.FC<ExtensionHandleProps> = ({
   onReset,
   selectedCount,
   onSubmit,
-  onDeleteSelected, // Destructure the new prop
+  onDeleteSelected,
 }) => {
   const [isDragging, setIsDragging] = useState(false);
   const [startX, setStartX] = useState<number | null>(null);
-  const [currentWidthPercentage, setCurrentWidthPercentage] = useState<number>(60); // Starting with 60%
+  const [currentWidthPercentage, setCurrentWidthPercentage] = useState<number>(60);
 
   const handleMouseDown = (e: React.MouseEvent) => {
-    e.preventDefault(); // Prevent default behavior to avoid unwanted scrolling
+    e.preventDefault();
     setIsDragging(true);
     setStartX(e.clientX);
   };
@@ -562,7 +561,7 @@ const ExtensionHandle: React.FC<ExtensionHandleProps> = ({
       const deltaX = e.clientX - startX;
       const deltaPercentage = (deltaX / window.innerWidth) * 100;
       let newWidthPercentage = currentWidthPercentage + deltaPercentage;
-      newWidthPercentage = Math.min(Math.max(newWidthPercentage, 30), 90); // Constraints between 30% and 90%
+      newWidthPercentage = Math.min(Math.max(newWidthPercentage, 30), 90);
       onExtend(newWidthPercentage);
       setCurrentWidthPercentage(newWidthPercentage);
       setStartX(e.clientX);
@@ -578,7 +577,6 @@ const ExtensionHandle: React.FC<ExtensionHandleProps> = ({
     if (isDragging) {
       document.addEventListener('mousemove', handleMouseMove);
       document.addEventListener('mouseup', handleMouseUp);
-      // Prevent text selection during dragging
       document.body.style.userSelect = 'none';
     } else {
       document.removeEventListener('mousemove', handleMouseMove);
