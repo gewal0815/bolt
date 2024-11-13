@@ -9,8 +9,12 @@ import { darcula } from 'react-syntax-highlighter/dist/esm/styles/prism'; // Dar
 import { materialLight } from 'react-syntax-highlighter/dist/esm/styles/prism'; // Light theme for code blocks
 import ContentCopyIcon from '@mui/icons-material/ContentCopy'; // Import copy icon
 import Tooltip from '@mui/material/Tooltip'; // Import Tooltip for copy feedback
+import DragIndicatorIcon from '@mui/icons-material/DragIndicator';
+import RestoreIcon from '@mui/icons-material/Restore';
+
 
 interface Message {
+  id: string;
   sender: 'user' | 'ai';
   text: string;
   timestamp: string;
@@ -25,8 +29,12 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ onClose }) => {
   const [inputValue, setInputValue] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [isDarkMode, setIsDarkMode] = useState(false);
+  const [aiResponseWidth, setAiResponseWidth] = useState<number>(60); // Initial width percentage
+  const originalWidth = 60; // Original width before resizing
+  const [showResetButton, setShowResetButton] = useState<boolean>(false);
   const messageEndRef = useRef<HTMLDivElement>(null);
   const chatRef = useRef<HTMLDivElement>(null);
+  const [position, setPosition] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
 
   // Persist sessionId in localStorage
   const [sessionId] = useState<string>(() => {
@@ -40,16 +48,16 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ onClose }) => {
     }
   });
 
-  const [position, setPosition] = useState<{ x: number; y: number }>(() => {
-    const savedPosition = localStorage.getItem('chatPosition');
-    return savedPosition ? JSON.parse(savedPosition) : { x: 0, y: 0 };
-  });
-
   useEffect(() => {
     if (!localStorage.getItem('chatPosition')) {
       const initialX = (window.innerWidth - 400) / 2; // Approximate center
       const initialY = (window.innerHeight - 600) / 2;
       setPosition({ x: initialX, y: initialY });
+    } else {
+      const savedPosition = localStorage.getItem('chatPosition');
+      if (savedPosition) {
+        setPosition(JSON.parse(savedPosition));
+      }
     }
   }, []);
 
@@ -57,10 +65,13 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ onClose }) => {
     // Fetch message history on component mount
     const fetchMessageHistory = async () => {
       try {
-        const response = await fetch(`http://localhost:5000/api/messages?session_id=${sessionId}&time_period=1 month`, {
-          method: 'GET',
-          headers: { 'Content-Type': 'application/json' },
-        });
+        const response = await fetch(
+          `http://localhost:5000/api/messages?session_id=${sessionId}&time_period=1 month`,
+          {
+            method: 'GET',
+            headers: { 'Content-Type': 'application/json' },
+          }
+        );
 
         if (!response.ok) {
           throw new Error(`Backend GET error: ${response.statusText}`);
@@ -86,6 +97,7 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ onClose }) => {
     if (!inputValue.trim()) return;
 
     const userMessage: Message = {
+      id: uuidv4(),
       sender: 'user',
       text: inputValue,
       timestamp: new Date().toISOString(),
@@ -109,15 +121,19 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ onClose }) => {
 
   const getAIResponse = async (chatInput: string) => {
     try {
-      const response = await fetch('http://localhost:5678/webhook/e4498659-6af2-480b-9578-0382d998f73a', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ input: { sessionId: sessionId, chatInput: chatInput } }),
-      });
+      const response = await fetch(
+        'http://localhost:5678/webhook/e4498659-6af2-480b-9578-0382d998f73a',
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ input: { sessionId: sessionId, chatInput: chatInput } }),
+        }
+      );
       if (!response.ok) throw new Error(`AI Webhook error: ${response.statusText}`);
 
       const data = await response.json();
       const aiMessage: Message = {
+        id: uuidv4(),
         sender: 'ai',
         text: data.output || 'No response from AI.',
         timestamp: new Date().toISOString(),
@@ -130,6 +146,7 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ onClose }) => {
       setMessages((prev) => [
         ...prev,
         {
+          id: uuidv4(),
           sender: 'ai',
           text: 'Error processing your request.',
           timestamp: new Date().toISOString(),
@@ -161,9 +178,18 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ onClose }) => {
     localStorage.setItem('chatPosition', JSON.stringify(newPosition));
   };
 
-  const renderMessage = (message: Message) => {
-    console.log('Rendering Message:', message);
+  const handleExtendAIResponse = (newWidthPercentage: number) => {
+    setAiResponseWidth(newWidthPercentage);
+    setShowResetButton(true);
+  };
 
+  const resetAIResponseWidth = () => {
+    setAiResponseWidth(originalWidth);
+    setShowResetButton(false);
+  };
+
+  // Render individual message
+  const renderMessage = (message: Message) => {
     if (!message.text || !message.sender) {
       return <span style={{ color: 'red' }}>Invalid message data.</span>;
     }
@@ -190,6 +216,7 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ onClose }) => {
     });
   };
 
+  // Parse message text to identify code blocks
   const parseMessageText = (text: string) => {
     if (!text) {
       return [{ type: 'text', content: 'No message content available.' }];
@@ -231,7 +258,13 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ onClose }) => {
 
   return (
     <Draggable handle=".chat-header" position={position} onDrag={handleDrag} nodeRef={chatRef}>
-      <div className={`chat-interface ${isDarkMode ? 'dark-mode' : 'light-mode'}`} ref={chatRef}>
+      <div
+        className={`chat-interface ${isDarkMode ? 'dark-mode' : 'light-mode'} ${
+          showResetButton ? 'show-reset' : ''
+        }`}
+        ref={chatRef}
+      >
+        {/* Chat Header */}
         <div className="chat-header">
           <h1 className="chat-title">Chat Interface</h1>
           <div className="chat-header-controls">
@@ -242,19 +275,32 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ onClose }) => {
             </button>
           </div>
         </div>
+
+        {/* Chat Messages */}
         <div className="chat-messages">
-          {messages.map((message, index) => (
+          {messages.map((message) => (
             <div
-              key={index}
-              className={`chat-message ${message.sender === 'user' ? 'chat-message-user' : 'chat-message-ai'}`}
+              key={message.id}
+              className={`chat-message ${
+                message.sender === 'user' ? 'chat-message-user' : 'chat-message-ai'
+              } ${message.sender === 'ai' && showResetButton ? 'extended' : ''}`}
+              style={
+                message.sender === 'ai'
+                  ? { maxWidth: `${aiResponseWidth}%` }
+                  : {}
+              }
             >
               <div>{renderMessage(message)}</div>
-              <div className="chat-message-timestamp">{new Date(message.timestamp).toLocaleString()}</div>
+              <div className="chat-message-timestamp">
+                {new Date(message.timestamp).toLocaleString()}
+              </div>
             </div>
           ))}
           {isLoading && <div className="chat-loading-indicator">Loading...</div>}
           <div ref={messageEndRef} />
         </div>
+
+        {/* Chat Input Area */}
         <div className="chat-input-area">
           <textarea
             className="chat-input"
@@ -268,6 +314,14 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ onClose }) => {
             Send
           </button>
         </div>
+
+        {/* Fixed Extension Handle */}
+        <ExtensionHandle
+          onExtend={handleExtendAIResponse}
+          isDarkMode={isDarkMode}
+          showResetButton={showResetButton}
+          onReset={resetAIResponseWidth}
+        />
       </div>
     </Draggable>
   );
@@ -282,7 +336,8 @@ interface CodeBlockWithCopyProps {
 const CodeBlockWithCopy: React.FC<CodeBlockWithCopyProps> = ({ code, language, isDarkMode }) => {
   const [copySuccess, setCopySuccess] = useState(false);
 
-  const handleCopyCode = () => {
+  const handleCopyCode = (e: React.MouseEvent<HTMLButtonElement>) => {
+    e.preventDefault(); // Prevent default behavior
     navigator.clipboard.writeText(code).then(
       () => {
         setCopySuccess(true);
@@ -313,23 +368,105 @@ const CodeBlockWithCopy: React.FC<CodeBlockWithCopyProps> = ({ code, language, i
         {code}
       </SyntaxHighlighter>
       <Tooltip title={copySuccess ? 'Copied!' : 'Copy'} placement="top" arrow>
-        <button
-          onClick={handleCopyCode}
-          className="copy-code-button"
-          aria-label="Copy code"
-          style={{
-            position: 'absolute',
-            top: '10px',
-            right: '10px',
-            background: 'transparent',
-            border: 'none',
-            cursor: 'pointer',
-            color: isDarkMode ? '#fff' : '#000',
-          }}
-        >
+        <button onClick={handleCopyCode} className="copy-code-button" aria-label="Copy code">
           <ContentCopyIcon fontSize="small" />
         </button>
       </Tooltip>
+    </div>
+  );
+};
+
+/* ExtensionHandle Component */
+interface ExtensionHandleProps {
+  onExtend: (newWidthPercentage: number) => void;
+  isDarkMode: boolean;
+  showResetButton: boolean;
+  onReset: () => void;
+}
+
+const ExtensionHandle: React.FC<ExtensionHandleProps> = ({
+  onExtend,
+  isDarkMode,
+  showResetButton,
+  onReset,
+}) => {
+  const [isDragging, setIsDragging] = useState(false);
+  const [startX, setStartX] = useState<number | null>(null);
+  const [currentWidthPercentage, setCurrentWidthPercentage] = useState<number>(60); // Starting with 60%
+
+  const handleMouseDown = (e: React.MouseEvent) => {
+    e.preventDefault(); // Prevent default behavior to avoid unwanted scrolling
+    setIsDragging(true);
+    setStartX(e.clientX);
+  };
+
+  const handleMouseMove = (e: MouseEvent) => {
+    if (isDragging && startX !== null) {
+      const deltaX = e.clientX - startX;
+      const deltaPercentage = (deltaX / window.innerWidth) * 100;
+      let newWidthPercentage = currentWidthPercentage + deltaPercentage;
+      newWidthPercentage = Math.min(Math.max(newWidthPercentage, 30), 90); // Constraints between 30% and 90%
+      onExtend(newWidthPercentage);
+      setCurrentWidthPercentage(newWidthPercentage);
+      setStartX(e.clientX);
+    }
+  };
+
+  const handleMouseUp = () => {
+    setIsDragging(false);
+    setStartX(null);
+  };
+
+  useEffect(() => {
+    if (isDragging) {
+      document.addEventListener('mousemove', handleMouseMove);
+      document.addEventListener('mouseup', handleMouseUp);
+      // Prevent text selection during dragging
+      document.body.style.userSelect = 'none';
+    } else {
+      document.removeEventListener('mousemove', handleMouseMove);
+      document.removeEventListener('mouseup', handleMouseUp);
+      document.body.style.userSelect = 'auto';
+    }
+
+    return () => {
+      document.removeEventListener('mousemove', handleMouseMove);
+      document.removeEventListener('mouseup', handleMouseUp);
+      document.body.style.userSelect = 'auto';
+    };
+  }, [isDragging, startX, currentWidthPercentage]);
+
+  return (
+    <div className="extension-handle-container">
+      <button
+        className="extension-handle-button"
+        onMouseDown={handleMouseDown}
+        aria-label="Extend AI Response"
+      >
+        <DragIndicatorIcon
+          style={{
+            color: isDarkMode ? '#ffffff' : '#000000',
+            cursor: 'ew-resize',
+            width: '24px', // Increased icon size
+            height: '24px', // Increased icon size
+          }}
+        />
+      </button>
+      {showResetButton && (
+        <button
+          className="reset-width-button"
+          onClick={onReset}
+          aria-label="Reset AI Response Width"
+        >
+          <RestoreIcon
+            style={{
+              color: isDarkMode ? '#ffffff' : '#000000',
+              width: '24px', // Increased icon size
+              height: '24px', // Increased icon size
+            }}
+          />
+        </button>
+      )}
     </div>
   );
 };

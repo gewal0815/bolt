@@ -56,8 +56,17 @@
   transition: background-color 0.3s, color 0.3s, border-color 0.3s;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+
+  /* Positioning for the fixed extension handle */
+  position: relative;
+
+  /* Show Reset Button When Needed */
+  &.show-reset .reset-width-button {
+    display: flex;
+  }
 }
 
+/* Close Button Styles */
 .chat-interface .chat-header .chat-close-button {
   user-select: none; /* Prevents text selection only on the close button */
 }
@@ -111,6 +120,19 @@
     background-color: #3a3a3a;
     color: var(--color-text-dark);
   }
+
+  /* Close Button Styling in Dark Mode */
+  .chat-close-button {
+    background: transparent; /* Ensure transparent background */
+    color: var(--color-text-dark);
+    padding: 5px;
+    border-radius: 50%;
+    transition: background-color 0.3s;
+
+    &:hover {
+      background-color: rgba(255, 255, 255, 0.1);
+    }
+  }
 }
 
 /* Light Mode Styling */
@@ -162,6 +184,19 @@
     background-color: var(--color-secondary);
     color: var(--color-text-light);
   }
+
+  /* Close Button Styling in Light Mode */
+  .chat-close-button {
+    background: transparent; /* Ensure transparent background */
+    color: var(--color-text-light);
+    padding: 5px;
+    border-radius: 50%;
+    transition: background-color 0.3s;
+
+    &:hover {
+      background-color: rgba(0, 0, 0, 0.05);
+    }
+  }
 }
 
 /* Chat Header */
@@ -187,6 +222,7 @@
   flex-direction: column;
   gap: var(--spacing-small);
   background-color: inherit;
+  position: relative; /* For positioning the extension handle */
 
   /* Custom Scrollbar Styling */
   &::-webkit-scrollbar {
@@ -232,15 +268,20 @@
     color: var(--color-text-light);
     align-self: flex-start;
     border-top-left-radius: 0;
-  }
 
-  /* Timestamp */
-  .chat-message-timestamp {
-    font-size: var(--font-size-small);
-    margin-top: 4px;
-    opacity: 0.7;
-    text-align: right;
-    color: inherit;
+    /* Extended AI Message Styling */
+    &.extended {
+      max-width: 80%; /* Adjust as needed */
+    }
+
+    /* Timestamp */
+    .chat-message-timestamp {
+      font-size: var(--font-size-small);
+      margin-top: 4px;
+      opacity: 0.7;
+      text-align: right;
+      color: inherit;
+    }
   }
 }
 
@@ -271,9 +312,14 @@
   border: none;
   cursor: pointer;
   color: inherit;
+  padding: 5px; /* Added padding */
 
   &:focus {
     outline: none;
+  }
+
+  &:hover {
+    opacity: 0.8;
   }
 }
 
@@ -367,6 +413,76 @@
   }
 }
 
+/* Fixed Extension Handle */
+.extension-handle-container {
+  position: absolute;
+  top: 50%;
+  right: 0;
+  transform: translateY(-50%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 5px;
+  background: transparent;
+  z-index: 10; /* Ensure it's above other elements */
+}
+
+.extension-handle-button {
+  background: transparent;
+  border: none;
+  cursor: ew-resize; /* Indicates horizontal resize */
+  padding: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 48px; /* Increased size */
+  height: 48px; /* Increased size */
+  border-radius: 6px; /* Slight rounding for aesthetics */
+  transition: background-color 0.3s;
+
+  &:hover {
+    background-color: rgba(0, 0, 0, 0.1);
+  }
+
+  svg {
+    fill: currentColor;
+    width: 24px; /* Increased icon size */
+    height: 24px; /* Increased icon size */
+  }
+}
+
+/* Reset Button */
+.reset-width-button {
+  margin-top: 10px; /* Space between handle and reset button */
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  padding: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 48px; /* Increased size */
+  height: 48px; /* Increased size */
+  border-radius: 6px; /* Slight rounding for aesthetics */
+  transition: background-color 0.3s;
+  display: none; /* Initially hidden */
+
+  &:hover {
+    background-color: rgba(0, 0, 0, 0.1);
+  }
+
+  svg {
+    fill: currentColor;
+    width: 24px; /* Increased icon size */
+    height: 24px; /* Increased icon size */
+  }
+}
+
+/* Show Reset Button When Needed */
+.chat-interface.show-reset .reset-width-button {
+  display: flex;
+}
+
 /* Loading Indicator */
 .chat-loading-indicator {
   text-align: center;
@@ -405,5 +521,17 @@
 
   .chat-message-timestamp {
     font-size: 12px;
+  }
+
+  /* Adjust extension handle and reset button for smaller screens */
+  .extension-handle-button,
+  .reset-width-button {
+    width: 40px;
+    height: 40px;
+
+    svg {
+      width: 20px;
+      height: 20px;
+    }
   }
 }
