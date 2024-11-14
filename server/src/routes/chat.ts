@@ -116,6 +116,42 @@ router.get('/messages', extractSessionId, async (req: Request, res: Response) =>
 });
 
 /**
+ * POST /api/messages
+ * Create a new message
+ * Body Parameters:
+ * - text: string (the message content)
+ */
+router.post('/messages', extractSessionId, async (req: Request, res: Response) => {
+  const sessionId = req.sessionId!;
+  const { text } = req.body;
+
+  if (!text) {
+    res.status(400).json({ message: 'Text is required.' });
+    return;
+  }
+
+  try {
+    const messageData = {
+      session_id: sessionId,
+      message: { type: 'human', content: text },
+      timestamp: new Date(),
+    };
+
+    const result = await pool.query(
+      'INSERT INTO n8n_chat_histories (session_id, message, timestamp) VALUES ($1, $2, $3) RETURNING id',
+      [messageData.session_id, messageData.message, messageData.timestamp]
+    );
+
+    const messageId = result.rows[0].id;
+
+    res.status(201).json({ messageId: messageId });
+  } catch (error) {
+    console.error('Error saving message:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+/**
  * PUT /api/code/:id
  * Update a specific code snippet within a message
  * Body Parameters:

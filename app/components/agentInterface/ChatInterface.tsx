@@ -21,11 +21,11 @@ interface Part {
   id: string;
   content: string;
   language?: string;
-  messageId: number | string;
+  messageId: number;
 }
 
 interface Message {
-  id: number | string;
+  id: number;
   sender: 'user' | 'ai';
   text: string;
   timestamp: string;
@@ -33,7 +33,7 @@ interface Message {
 }
 
 interface SelectedCodeBlock {
-  messageId: number | string;
+  messageId: number;
   partId: string;
   code: string;
 }
@@ -87,43 +87,59 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ onClose }) => {
   const handleSend = async () => {
     if (!inputValue.trim()) return;
 
-    const userMessage: Message = {
-      id: uuidv4(),
-      sender: 'user',
-      text: inputValue,
-      timestamp: new Date().toISOString(),
-      parts: parseMessageText(inputValue, uuidv4()),
-    };
-
-    setMessages((prev) => [...prev, userMessage]);
-    setInputValue('');
     setIsLoading(true);
 
     try {
+      const response = await fetch('http://localhost:5000/api/messages', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Session-ID': sessionId,
+        },
+        body: JSON.stringify({ text: inputValue }),
+      });
+
+      if (!response.ok) throw new Error(`Message send error: ${response.statusText}`);
+
+      const data = await response.json();
+
+      const userMessage: Message = {
+        id: data.messageId, // Use the ID returned by the backend
+        sender: 'user',
+        text: inputValue,
+        timestamp: new Date().toISOString(),
+        parts: parseMessageText(inputValue, data.messageId),
+      };
+
+      setMessages((prev) => [...prev, userMessage]);
+      setInputValue('');
+
+      // Fetch AI response after sending user message
       await getAIResponse(inputValue);
     } catch (error) {
-      console.error('Error processing user message:', error);
+      console.error('Error sending message:', error);
+    } finally {
       setIsLoading(false);
     }
   };
 
   const getAIResponse = async (chatInput: string) => {
     try {
-      const response = await fetch(
-        'http://localhost:5678/webhook/e4498659-6af2-480b-9578-0382d998f73a',
-        {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Session-ID': sessionId,
-          },
-          body: JSON.stringify({ input: { sessionId: sessionId, chatInput: chatInput } }),
-        }
-      );
+      const response = await fetch('http://localhost:5678/webhook/e4498659-6af2-480b-9578-0382d998f73a', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Session-ID': sessionId,
+        },
+        body: JSON.stringify({ input: { sessionId: sessionId, chatInput: chatInput } }),
+      });
+
       if (!response.ok) throw new Error(`AI Webhook error: ${response.statusText}`);
 
       const data = await response.json();
-      const aiMessageId = uuidv4();
+
+      const aiMessageId = data.messageId;
+
       const aiMessage: Message = {
         id: aiMessageId,
         sender: 'ai',
@@ -131,11 +147,12 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ onClose }) => {
         timestamp: new Date().toISOString(),
         parts: parseMessageText(data.output || 'No response from AI.', aiMessageId),
       };
+
       setMessages((prev) => [...prev, aiMessage]);
     } catch (error) {
       console.error('Error fetching AI response:', error);
       const errorMessage: Message = {
-        id: uuidv4(),
+        id: uuidv4(), // Temporary ID since backend failed to provide one
         sender: 'ai',
         text: 'Error processing your request.',
         timestamp: new Date().toISOString(),
@@ -260,7 +277,7 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ onClose }) => {
     });
   };
 
-  const parseMessageText = (text: string, messageId: number | string): Part[] => {
+  const parseMessageText = (text: string, messageId: number): Part[] => {
     if (!text) {
       return [{ type: 'text', id: uuidv4(), content: 'No message content available.', messageId }];
     }
@@ -303,7 +320,7 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ onClose }) => {
     return result;
   };
 
-  const handleDeleteCodeBlock = async (messageId: number | string, codeContent: string) => {
+  const handleDeleteCodeBlock = async (messageId: number, codeContent: string) => {
     try {
       const response = await fetch(`http://localhost:5000/api/code/${messageId}`, {
         method: 'DELETE',
@@ -315,42 +332,46 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ onClose }) => {
       });
 
       if (!response.ok) {
-        throw new Error(`Delete error: ${response.statusText}`);
+        const errorData = await response.json();
+        throw new Error(`Delete error: ${errorData.message || response.statusText}`);
       }
 
-      const updatedMessages = messages.map((message) => {
-        if (message.id === messageId) {
-          const updatedText = message.text.replace(
-            new RegExp(`\`\`\`.*?\n${codeContent}\n\`\`\``, 's'),
-            ''
-          );
-          return {
-            ...message,
-            text: updatedText,
-            parts: parseMessageText(updatedText, messageId),
-          };
-        }
-        return message;
-      });
+      // After successful deletion, reload the message history
+      await fetchMessageHistory();
 
-      setMessages(updatedMessages);
+      // Optionally, remove the deleted code block from selectedCodeBlocks
       setSelectedCodeBlocks((prev) =>
         prev.filter((block) => !(block.messageId === messageId && block.code === codeContent))
       );
     } catch (error) {
       console.error('Error deleting code block:', error);
+      // Optionally, display an error message to the user
     }
   };
 
   const handleSubmitSelected = () => {
     console.log('Submitting selected code blocks:', selectedCodeBlocks);
+    // Implement submission logic as needed
   };
 
-  const handleDeleteSelectedCodeBlocks = () => {
-    selectedCodeBlocks.forEach(async (block) => {
-      await handleDeleteCodeBlock(block.messageId, block.code);
-    });
-    setSelectedCodeBlocks([]);
+  const handleDeleteSelectedCodeBlocks = async () => {
+    setIsLoading(true);
+    try {
+      // Delete all selected code blocks sequentially
+      for (const block of selectedCodeBlocks) {
+        await handleDeleteCodeBlock(block.messageId, block.code);
+      }
+
+      // After all deletions, fetch the updated message history
+      await fetchMessageHistory();
+
+      // Clear the selected code blocks
+      setSelectedCodeBlocks([]);
+    } catch (error) {
+      console.error('Error deleting selected code blocks:', error);
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   interface CodeBlockWithCopyProps {
@@ -427,6 +448,12 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ onClose }) => {
           <Tooltip title={copySuccess ? 'Copied!' : 'Copy'} placement="top" arrow>
             <button onClick={handleCopyCode} className="copy-code-button" aria-label="Copy code">
               <ContentCopyIcon />
+            </button>
+          </Tooltip>
+
+          <Tooltip title="Delete" placement="top" arrow>
+            <button onClick={onDelete} className="delete-code-button" aria-label="Delete code block">
+              <DeleteIcon />
             </button>
           </Tooltip>
         </div>
