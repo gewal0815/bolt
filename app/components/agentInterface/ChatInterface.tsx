@@ -1,4 +1,4 @@
-// ChatInterface.tsx
+// frontend/src/components/ChatInterface.tsx
 
 import React, { useState, useEffect, useRef } from 'react';
 import Draggable, { DraggableData, DraggableEvent } from 'react-draggable';
@@ -21,14 +21,21 @@ interface Part {
   id: string;
   content: string;
   language?: string;
+  messageId: number | string;
 }
 
 interface Message {
-  id: string;
+  id: number | string;
   sender: 'user' | 'ai';
   text: string;
   timestamp: string;
   parts: Part[];
+}
+
+interface SelectedCodeBlock {
+  messageId: number | string;
+  partId: string;
+  code: string;
 }
 
 interface ChatInterfaceProps {
@@ -43,22 +50,18 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ onClose }) => {
   const [aiResponseWidth, setAiResponseWidth] = useState<number>(60);
   const originalWidth = 60;
   const [showResetButton, setShowResetButton] = useState<boolean>(false);
-  const [selectedCodeBlocks, setSelectedCodeBlocks] = useState<string[]>([]);
+  const [selectedCodeBlocks, setSelectedCodeBlocks] = useState<SelectedCodeBlock[]>([]);
   const messageEndRef = useRef<HTMLDivElement>(null);
   const chatRef = useRef<HTMLDivElement>(null);
   const [position, setPosition] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
 
-  // Persist sessionId in localStorage
-  const [sessionId] = useState<string>(() => {
-    const storedSessionId = localStorage.getItem('sessionId');
-    if (storedSessionId) {
-      return storedSessionId;
-    } else {
-      const newSessionId = uuidv4();
-      localStorage.setItem('sessionId', newSessionId);
-      return newSessionId;
+  const sessionId = localStorage.getItem('sessionId') || uuidv4();
+
+  useEffect(() => {
+    if (!localStorage.getItem('sessionId')) {
+      localStorage.setItem('sessionId', sessionId);
     }
-  });
+  }, [sessionId]);
 
   useEffect(() => {
     if (!localStorage.getItem('chatPosition')) {
@@ -74,35 +77,6 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ onClose }) => {
   }, []);
 
   useEffect(() => {
-    // Fetch message history on component mount
-    const fetchMessageHistory = async () => {
-      try {
-        const response = await fetch(
-          `http://localhost:5000/api/messages?session_id=${sessionId}&time_period=1 month`,
-          {
-            method: 'GET',
-            headers: { 'Content-Type': 'application/json' },
-          }
-        );
-
-        if (!response.ok) {
-          throw new Error(`Backend GET error: ${response.statusText}`);
-        }
-
-        const data: Message[] = await response.json();
-
-        // Parse and store parts
-        const messagesWithParts = data.map((msg) => ({
-          ...msg,
-          parts: parseMessageText(msg.text),
-        }));
-        setMessages(messagesWithParts);
-        console.log('Message History:', messagesWithParts);
-      } catch (error) {
-        console.error('Error fetching message history:', error);
-      }
-    };
-
     fetchMessageHistory();
   }, [sessionId]);
 
@@ -118,7 +92,7 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ onClose }) => {
       sender: 'user',
       text: inputValue,
       timestamp: new Date().toISOString(),
-      parts: parseMessageText(inputValue),
+      parts: parseMessageText(inputValue, uuidv4()),
     };
 
     setMessages((prev) => [...prev, userMessage]);
@@ -126,7 +100,6 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ onClose }) => {
     setIsLoading(true);
 
     try {
-      console.log('User Message:', userMessage);
       await getAIResponse(inputValue);
     } catch (error) {
       console.error('Error processing user message:', error);
@@ -140,31 +113,33 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ onClose }) => {
         'http://localhost:5678/webhook/e4498659-6af2-480b-9578-0382d998f73a',
         {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: {
+            'Content-Type': 'application/json',
+            'Session-ID': sessionId,
+          },
           body: JSON.stringify({ input: { sessionId: sessionId, chatInput: chatInput } }),
         }
       );
       if (!response.ok) throw new Error(`AI Webhook error: ${response.statusText}`);
 
       const data = await response.json();
+      const aiMessageId = uuidv4();
       const aiMessage: Message = {
-        id: uuidv4(),
+        id: aiMessageId,
         sender: 'ai',
         text: data.output || 'No response from AI.',
         timestamp: new Date().toISOString(),
-        parts: parseMessageText(data.output || 'No response from AI.'),
+        parts: parseMessageText(data.output || 'No response from AI.', aiMessageId),
       };
       setMessages((prev) => [...prev, aiMessage]);
-
-      console.log('AI Message:', aiMessage);
     } catch (error) {
       console.error('Error fetching AI response:', error);
-      const errorMessage = {
+      const errorMessage: Message = {
         id: uuidv4(),
         sender: 'ai',
         text: 'Error processing your request.',
         timestamp: new Date().toISOString(),
-        parts: parseMessageText('Error processing your request.'),
+        parts: parseMessageText('Error processing your request.', uuidv4()),
       };
       setMessages((prev) => [...prev, errorMessage]);
     } finally {
@@ -203,60 +178,50 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ onClose }) => {
     setShowResetButton(false);
   };
 
-  const toggleCodeBlockSelection = (id: string) => {
+  const toggleCodeBlockSelection = (selectedBlock: SelectedCodeBlock) => {
     setSelectedCodeBlocks((prev) => {
-      if (prev.includes(id)) {
-        return prev.filter((blockId) => blockId !== id);
+      const exists = prev.find(
+        (block) => block.partId === selectedBlock.partId && block.messageId === selectedBlock.messageId
+      );
+      if (exists) {
+        return prev.filter(
+          (block) => !(block.partId === selectedBlock.partId && block.messageId === selectedBlock.messageId)
+        );
       } else {
-        return [...prev, id];
+        return [...prev, selectedBlock];
       }
     });
   };
 
-  const handleSubmitSelected = () => {
-    const selectedCodeBlocksData = [];
-
-    messages.forEach((msg) => {
-      msg.parts.forEach((part) => {
-        if (part.type === 'code' && selectedCodeBlocks.includes(part.id)) {
-          selectedCodeBlocksData.push({
-            messageId: msg.id,
-            codeBlockId: part.id,
-            language: part.language,
-            content: part.content,
-          });
+  const fetchMessageHistory = async () => {
+    try {
+      const response = await fetch(
+        `http://localhost:5000/api/messages?time_period=1 month`,
+        {
+          method: 'GET',
+          headers: {
+            'Content-Type': 'application/json',
+            'Session-ID': sessionId,
+          },
         }
-      });
-    });
+      );
 
-    console.log('Submitting selected code blocks:', selectedCodeBlocksData);
-    // Implement actual submission logic here
+      if (!response.ok) {
+        throw new Error(`Backend GET error: ${response.statusText}`);
+      }
+
+      const data: Message[] = await response.json();
+
+      const messagesWithParts = data.map((msg) => ({
+        ...msg,
+        parts: parseMessageText(msg.text, msg.id),
+      }));
+      setMessages(messagesWithParts);
+    } catch (error) {
+      console.error('Error fetching message history:', error);
+    }
   };
 
-  const handleDeleteSelected = () => {
-    setMessages((prevMessages) =>
-      prevMessages.map((msg) => {
-        const filteredParts = msg.parts.filter(
-          (part) => !(part.type === 'code' && selectedCodeBlocks.includes(part.id))
-        );
-        const newText = filteredParts
-          .map((part) => {
-            if (part.type === 'code') {
-              return `\`\`\`${part.language}\n${part.content}\`\`\``;
-            } else {
-              return part.content;
-            }
-          })
-          .join('');
-        return { ...msg, text: newText, parts: filteredParts };
-      })
-    );
-    setSelectedCodeBlocks([]);
-    console.log('Deleted selected code blocks.');
-    // Optionally, implement backend deletion logic here
-  };
-
-  // Render individual message
   const renderMessage = (message: Message) => {
     if (!message.parts || !message.sender) {
       return <span style={{ color: 'red' }}>Invalid message data.</span>;
@@ -264,6 +229,9 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ onClose }) => {
 
     return message.parts.map((part) => {
       if (part.type === 'code') {
+        const isSelected = selectedCodeBlocks.some(
+          (block) => block.partId === part.id && block.messageId === part.messageId
+        );
         return (
           <CodeBlockWithCopy
             key={part.id}
@@ -271,9 +239,15 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ onClose }) => {
             code={part.content}
             language={part.language || 'text'}
             isDarkMode={isDarkMode}
-            isSelected={selectedCodeBlocks.includes(part.id)}
-            onSelect={() => toggleCodeBlockSelection(part.id)}
-            onDelete={() => handleDeleteCodeBlock(part.id)}
+            isSelected={isSelected}
+            onSelect={() =>
+              toggleCodeBlockSelection({
+                messageId: part.messageId,
+                partId: part.id,
+                code: part.content,
+              })
+            }
+            onDelete={() => handleDeleteCodeBlock(part.messageId, part.content)}
           />
         );
       } else {
@@ -286,10 +260,9 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ onClose }) => {
     });
   };
 
-  // Parse message text to identify code blocks
-  const parseMessageText = (text: string): Part[] => {
+  const parseMessageText = (text: string, messageId: number | string): Part[] => {
     if (!text) {
-      return [{ type: 'text', id: uuidv4(), content: 'No message content available.' }];
+      return [{ type: 'text', id: uuidv4(), content: 'No message content available.', messageId }];
     }
 
     const regex = /```(\w+)?\n([\s\S]+?)```/g;
@@ -299,11 +272,11 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ onClose }) => {
 
     while ((match = regex.exec(text)) !== null) {
       if (match.index > lastIndex) {
-        // Add text before code block
         result.push({
           type: 'text',
           id: uuidv4(),
           content: text.substring(lastIndex, match.index),
+          messageId,
         });
       }
 
@@ -312,43 +285,285 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ onClose }) => {
         id: uuidv4(),
         language: match[1] || 'text',
         content: match[2],
+        messageId,
       });
 
       lastIndex = regex.lastIndex;
     }
 
     if (lastIndex < text.length) {
-      // Add remaining text
       result.push({
         type: 'text',
         id: uuidv4(),
         content: text.substring(lastIndex),
+        messageId,
       });
     }
 
     return result;
   };
 
-  const handleDeleteCodeBlock = (id: string) => {
-    setMessages((prevMessages) =>
-      prevMessages.map((msg) => {
-        const filteredParts = msg.parts.filter(
-          (part) => !(part.type === 'code' && part.id === id)
-        );
-        const newText = filteredParts
-          .map((part) => {
-            if (part.type === 'code') {
-              return `\`\`\`${part.language}\n${part.content}\`\`\``;
-            } else {
-              return part.content;
-            }
-          })
-          .join('');
-        return { ...msg, text: newText, parts: filteredParts };
-      })
+  const handleDeleteCodeBlock = async (messageId: number | string, codeContent: string) => {
+    try {
+      const response = await fetch(`http://localhost:5000/api/code/${messageId}`, {
+        method: 'DELETE',
+        headers: {
+          'Content-Type': 'application/json',
+          'Session-ID': sessionId,
+        },
+        body: JSON.stringify({ selectedCode: codeContent }),
+      });
+
+      if (!response.ok) {
+        throw new Error(`Delete error: ${response.statusText}`);
+      }
+
+      const updatedMessages = messages.map((message) => {
+        if (message.id === messageId) {
+          const updatedText = message.text.replace(
+            new RegExp(`\`\`\`.*?\n${codeContent}\n\`\`\``, 's'),
+            ''
+          );
+          return {
+            ...message,
+            text: updatedText,
+            parts: parseMessageText(updatedText, messageId),
+          };
+        }
+        return message;
+      });
+
+      setMessages(updatedMessages);
+      setSelectedCodeBlocks((prev) =>
+        prev.filter((block) => !(block.messageId === messageId && block.code === codeContent))
+      );
+    } catch (error) {
+      console.error('Error deleting code block:', error);
+    }
+  };
+
+  const handleSubmitSelected = () => {
+    console.log('Submitting selected code blocks:', selectedCodeBlocks);
+  };
+
+  const handleDeleteSelectedCodeBlocks = () => {
+    selectedCodeBlocks.forEach(async (block) => {
+      await handleDeleteCodeBlock(block.messageId, block.code);
+    });
+    setSelectedCodeBlocks([]);
+  };
+
+  interface CodeBlockWithCopyProps {
+    id: string;
+    code: string;
+    language: string;
+    isDarkMode: boolean;
+    isSelected: boolean;
+    onSelect: () => void;
+    onDelete: () => void;
+  }
+
+  const CodeBlockWithCopy: React.FC<CodeBlockWithCopyProps> = ({
+    id,
+    code,
+    language,
+    isDarkMode,
+    isSelected,
+    onSelect,
+    onDelete,
+  }) => {
+    const [copySuccess, setCopySuccess] = useState(false);
+
+    const handleCopyCode = (e: React.MouseEvent<HTMLButtonElement>) => {
+      e.preventDefault();
+      navigator.clipboard.writeText(code).then(
+        () => {
+          setCopySuccess(true);
+          setTimeout(() => setCopySuccess(false), 2000);
+        },
+        (err) => {
+          console.error('Could not copy text: ', err);
+        }
+      );
+    };
+
+    const handleSelectCode = (e: React.MouseEvent<HTMLButtonElement>) => {
+      e.preventDefault();
+      onSelect();
+    };
+
+    return (
+      <div className={`code-block-container ${isSelected ? 'selected' : ''}`}>
+        <SyntaxHighlighter
+          language={language}
+          style={isDarkMode ? darcula : materialLight}
+          wrapLongLines
+          customStyle={{
+            borderRadius: '10px',
+            padding: '15px',
+            fontSize: '16px',
+            backgroundColor: isDarkMode ? 'rgba(255, 255, 255, 0.05)' : 'rgba(255, 255, 255, 0.7)',
+            border: isSelected ? '2px solid green' : '1px solid rgba(0, 0, 0, 0.1)',
+            boxShadow: '0px 8px 16px rgba(0, 0, 0, 0.3)',
+            backdropFilter: 'blur(10px)',
+            position: 'relative',
+            zIndex: 1,
+          }}
+        >
+          {code}
+        </SyntaxHighlighter>
+
+        <div className="code-block-buttons-top">
+          <Tooltip title={isSelected ? 'Deselect' : 'Select'} placement="top" arrow>
+            <button
+              onClick={handleSelectCode}
+              className={`select-code-button ${isSelected ? 'selected' : ''}`}
+              aria-label="Select code for submission"
+            >
+              <BookmarkAddedIcon />
+            </button>
+          </Tooltip>
+
+          <Tooltip title={copySuccess ? 'Copied!' : 'Copy'} placement="top" arrow>
+            <button onClick={handleCopyCode} className="copy-code-button" aria-label="Copy code">
+              <ContentCopyIcon />
+            </button>
+          </Tooltip>
+        </div>
+      </div>
     );
-    // Remove the code block ID from selectedCodeBlocks
-    setSelectedCodeBlocks((prev) => prev.filter((blockId) => blockId !== id));
+  };
+
+  interface ExtensionHandleProps {
+    onExtend: (newWidthPercentage: number) => void;
+    isDarkMode: boolean;
+    showResetButton: boolean;
+    onReset: () => void;
+    selectedCount: number;
+    onSubmit: () => void;
+    onDeleteSelected: () => void;
+  }
+
+  const ExtensionHandle: React.FC<ExtensionHandleProps> = ({
+    onExtend,
+    isDarkMode,
+    showResetButton,
+    onReset,
+    selectedCount,
+    onSubmit,
+    onDeleteSelected,
+  }) => {
+    const [isDragging, setIsDragging] = useState(false);
+    const [startX, setStartX] = useState<number | null>(null);
+    const [currentWidthPercentage, setCurrentWidthPercentage] = useState<number>(60);
+
+    const handleMouseDown = (e: React.MouseEvent) => {
+      e.preventDefault();
+      setIsDragging(true);
+      setStartX(e.clientX);
+    };
+
+    const handleMouseMove = (e: MouseEvent) => {
+      if (isDragging && startX !== null) {
+        const deltaX = e.clientX - startX;
+        const deltaPercentage = (deltaX / window.innerWidth) * 100;
+        let newWidthPercentage = currentWidthPercentage + deltaPercentage;
+        newWidthPercentage = Math.min(Math.max(newWidthPercentage, 30), 90);
+        onExtend(newWidthPercentage);
+        setCurrentWidthPercentage(newWidthPercentage);
+        setStartX(e.clientX);
+      }
+    };
+
+    const handleMouseUp = () => {
+      setIsDragging(false);
+      setStartX(null);
+    };
+
+    useEffect(() => {
+      if (isDragging) {
+        document.addEventListener('mousemove', handleMouseMove);
+        document.addEventListener('mouseup', handleMouseUp);
+        document.body.style.userSelect = 'none';
+      } else {
+        document.removeEventListener('mousemove', handleMouseMove);
+        document.removeEventListener('mouseup', handleMouseUp);
+        document.body.style.userSelect = 'auto';
+      }
+
+      return () => {
+        document.removeEventListener('mousemove', handleMouseMove);
+        document.removeEventListener('mouseup', handleMouseUp);
+        document.body.style.userSelect = 'auto';
+      };
+    }, [isDragging, startX, currentWidthPercentage]);
+
+    return (
+      <div className="extension-handle-container">
+        <span className="extension-handle-label">Drag</span>
+
+        {showResetButton && (
+          <Tooltip title="Reset to Default" placement="left" arrow>
+            <button
+              className="reset-width-button"
+              onClick={onReset}
+              aria-label="Reset AI Response Width"
+            >
+              <RestoreIcon />
+            </button>
+          </Tooltip>
+        )}
+
+        <Tooltip title="Drag to Resize" placement="left" arrow>
+          <button
+            className="extension-handle-button"
+            onMouseDown={handleMouseDown}
+            aria-label="Drag to Resize AI Response"
+          >
+            <DragIndicatorIcon />
+          </button>
+        </Tooltip>
+
+        <div className="extension-handle-grey-line"></div>
+
+        <Tooltip title="Insert Image" placement="left" arrow>
+          <button className="placeholder-button" aria-label="Insert Image">
+            <InsertPhotoIcon />
+          </button>
+        </Tooltip>
+        <Tooltip title="Insert Emoji" placement="left" arrow>
+          <button className="placeholder-button" aria-label="Insert Emoji">
+            <InsertEmoticonIcon />
+          </button>
+        </Tooltip>
+
+        <div className="extension-handle-grey-line-bottom"></div>
+
+        {selectedCount > 0 && (
+          <>
+            <Tooltip title="Submit selected code blocks" placement="left" arrow>
+              <button
+                className="submit-button"
+                onClick={onSubmit}
+                aria-label="Submit selected code blocks"
+              >
+                <SendIcon />
+              </button>
+            </Tooltip>
+
+            <Tooltip title="Delete selected code blocks" placement="left" arrow>
+              <button
+                className="delete-selected-button"
+                onClick={onDeleteSelected}
+                aria-label="Delete selected code blocks"
+              >
+                <DeleteIcon />
+              </button>
+            </Tooltip>
+          </>
+        )}
+      </div>
+    );
   };
 
   return (
@@ -359,7 +574,6 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ onClose }) => {
         } ${selectedCodeBlocks.length > 0 ? 'has-selection' : ''}`}
         ref={chatRef}
       >
-        {/* Chat Header */}
         <div className="chat-header">
           <h1 className="chat-title">Chat Interface</h1>
           <div className="chat-header-controls">
@@ -371,7 +585,6 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ onClose }) => {
           </div>
         </div>
 
-        {/* Chat Messages */}
         <div className="chat-messages">
           {messages.map((message) => (
             <div
@@ -382,16 +595,17 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ onClose }) => {
               style={message.sender === 'ai' ? { maxWidth: `${aiResponseWidth}%` } : {}}
             >
               <div>{renderMessage(message)}</div>
-              <div className="chat-message-timestamp">
-                {new Date(message.timestamp).toLocaleString()}
-              </div>
+              {message.sender === 'ai' && (
+                <div className="chat-message-timestamp">
+                  {new Date(message.timestamp).toLocaleString()}
+                </div>
+              )}
             </div>
           ))}
           {isLoading && <div className="chat-loading-indicator">Loading...</div>}
           <div ref={messageEndRef} />
         </div>
 
-        {/* Chat Input Area */}
         <div className="chat-input-area">
           <textarea
             className="chat-input"
@@ -406,7 +620,6 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ onClose }) => {
           </button>
         </div>
 
-        {/* Fixed Extension Handle */}
         <ExtensionHandle
           onExtend={handleExtendAIResponse}
           isDarkMode={isDarkMode}
@@ -414,256 +627,10 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ onClose }) => {
           onReset={resetAIResponseWidth}
           selectedCount={selectedCodeBlocks.length}
           onSubmit={handleSubmitSelected}
-          onDeleteSelected={handleDeleteSelected}
+          onDeleteSelected={handleDeleteSelectedCodeBlocks}
         />
       </div>
     </Draggable>
-  );
-};
-
-interface CodeBlockWithCopyProps {
-  id: string;
-  code: string;
-  language: string;
-  isDarkMode: boolean;
-  isSelected: boolean;
-  onSelect: () => void;
-  onDelete: () => void;
-}
-
-const CodeBlockWithCopy: React.FC<CodeBlockWithCopyProps> = ({
-  id,
-  code,
-  language,
-  isDarkMode,
-  isSelected,
-  onSelect,
-  onDelete,
-}) => {
-  const [copySuccess, setCopySuccess] = useState(false);
-
-  const handleCopyCode = (e: React.MouseEvent<HTMLButtonElement>) => {
-    e.preventDefault();
-    navigator.clipboard.writeText(code).then(
-      () => {
-        setCopySuccess(true);
-        setTimeout(() => setCopySuccess(false), 2000);
-      },
-      (err) => {
-        console.error('Could not copy text: ', err);
-      }
-    );
-  };
-
-  const handleSelectCode = (e: React.MouseEvent<HTMLButtonElement>) => {
-    e.preventDefault();
-    onSelect();
-  };
-
-  const handleDeleteCode = (e: React.MouseEvent<HTMLButtonElement>) => {
-    e.preventDefault();
-    onDelete();
-  };
-
-  return (
-    <div className={`code-block-container ${isSelected ? 'selected' : ''}`}>
-      <SyntaxHighlighter
-        language={language}
-        style={isDarkMode ? darcula : materialLight}
-        wrapLongLines
-        customStyle={{
-          borderRadius: '10px',
-          padding: '15px',
-          fontSize: '16px',
-          backgroundColor: isDarkMode ? 'rgba(255, 255, 255, 0.05)' : 'rgba(255, 255, 255, 0.7)',
-          border: isSelected ? '2px solid green' : '1px solid rgba(0, 0, 0, 0.1)',
-          boxShadow: '0px 8px 16px rgba(0, 0, 0, 0.3)',
-          backdropFilter: 'blur(10px)',
-          position: 'relative',
-          zIndex: 1,
-        }}
-      >
-        {code}
-      </SyntaxHighlighter>
-
-      {/* Top Buttons Container */}
-      <div className="code-block-buttons-top">
-        {/* Select Button */}
-        <Tooltip title={isSelected ? 'Deselect' : 'Select'} placement="top" arrow>
-          <button
-            onClick={handleSelectCode}
-            className={`select-code-button ${isSelected ? 'selected' : ''}`}
-            aria-label="Select code for submission"
-          >
-            <BookmarkAddedIcon />
-          </button>
-        </Tooltip>
-
-        {/* Copy Button */}
-        <Tooltip title={copySuccess ? 'Copied!' : 'Copy'} placement="top" arrow>
-          <button onClick={handleCopyCode} className="copy-code-button" aria-label="Copy code">
-            <ContentCopyIcon />
-          </button>
-        </Tooltip>
-      </div>
-
-      {/* Bottom Buttons Container */}
-      {isSelected && (
-        <div className="code-block-buttons-bottom">
-          {/* Delete Button */}
-          <Tooltip title="Delete" placement="left" arrow>
-            <button
-              onClick={handleDeleteCode}
-              className="delete-code-button"
-              aria-label="Delete code snippet"
-            >
-              <DeleteIcon />
-            </button>
-          </Tooltip>
-        </div>
-      )}
-    </div>
-  );
-};
-
-/* ExtensionHandle Component */
-interface ExtensionHandleProps {
-  onExtend: (newWidthPercentage: number) => void;
-  isDarkMode: boolean;
-  showResetButton: boolean;
-  onReset: () => void;
-  selectedCount: number;
-  onSubmit: () => void;
-  onDeleteSelected: () => void;
-}
-
-const ExtensionHandle: React.FC<ExtensionHandleProps> = ({
-  onExtend,
-  isDarkMode,
-  showResetButton,
-  onReset,
-  selectedCount,
-  onSubmit,
-  onDeleteSelected,
-}) => {
-  const [isDragging, setIsDragging] = useState(false);
-  const [startX, setStartX] = useState<number | null>(null);
-  const [currentWidthPercentage, setCurrentWidthPercentage] = useState<number>(60);
-
-  const handleMouseDown = (e: React.MouseEvent) => {
-    e.preventDefault();
-    setIsDragging(true);
-    setStartX(e.clientX);
-  };
-
-  const handleMouseMove = (e: MouseEvent) => {
-    if (isDragging && startX !== null) {
-      const deltaX = e.clientX - startX;
-      const deltaPercentage = (deltaX / window.innerWidth) * 100;
-      let newWidthPercentage = currentWidthPercentage + deltaPercentage;
-      newWidthPercentage = Math.min(Math.max(newWidthPercentage, 30), 90);
-      onExtend(newWidthPercentage);
-      setCurrentWidthPercentage(newWidthPercentage);
-      setStartX(e.clientX);
-    }
-  };
-
-  const handleMouseUp = () => {
-    setIsDragging(false);
-    setStartX(null);
-  };
-
-  useEffect(() => {
-    if (isDragging) {
-      document.addEventListener('mousemove', handleMouseMove);
-      document.addEventListener('mouseup', handleMouseUp);
-      document.body.style.userSelect = 'none';
-    } else {
-      document.removeEventListener('mousemove', handleMouseMove);
-      document.removeEventListener('mouseup', handleMouseUp);
-      document.body.style.userSelect = 'auto';
-    }
-
-    return () => {
-      document.removeEventListener('mousemove', handleMouseMove);
-      document.removeEventListener('mouseup', handleMouseUp);
-      document.body.style.userSelect = 'auto';
-    };
-  }, [isDragging, startX, currentWidthPercentage]);
-
-  return (
-    <div className="extension-handle-container">
-      {/* Drag Label */}
-      <span className="extension-handle-label">Drag</span>
-
-      {/* Reset Button with Tooltip */}
-      {showResetButton && (
-        <Tooltip title="Reset to Default" placement="left" arrow>
-          <button
-            className="reset-width-button"
-            onClick={onReset}
-            aria-label="Reset AI Response Width"
-          >
-            <RestoreIcon />
-          </button>
-        </Tooltip>
-      )}
-
-      {/* Drag Indicator with Tooltip */}
-      <Tooltip title="Drag to Resize" placement="left" arrow>
-        <button
-          className="extension-handle-button"
-          onMouseDown={handleMouseDown}
-          aria-label="Drag to Resize AI Response"
-        >
-          <DragIndicatorIcon />
-        </button>
-      </Tooltip>
-
-      {/* Grey Line */}
-      <div className="extension-handle-grey-line"></div>
-
-      {/* Placeholder Icons with Tooltips */}
-      <Tooltip title="Insert Image" placement="left" arrow>
-        <button className="placeholder-button" aria-label="Insert Image">
-          <InsertPhotoIcon />
-        </button>
-      </Tooltip>
-      <Tooltip title="Insert Emoji" placement="left" arrow>
-        <button className="placeholder-button" aria-label="Insert Emoji">
-          <InsertEmoticonIcon />
-        </button>
-      </Tooltip>
-
-      {/* Grey Line Under Placeholders */}
-      <div className="extension-handle-grey-line-bottom"></div>
-
-      {/* Submit Button with Tooltip - Visible when selectedCount > 0 */}
-      {selectedCount > 0 && (
-        <Tooltip title="Submit selected code blocks" placement="left" arrow>
-          <button
-            className="submit-button"
-            onClick={onSubmit}
-            aria-label="Submit selected code blocks"
-          >
-            <SendIcon />
-          </button>
-        </Tooltip>
-      )}
-
-      {/* Delete Selected Button with Tooltip */}
-      {selectedCount > 0 && (
-        <Tooltip title="Delete selected code blocks" placement="left" arrow>
-          <button
-            className="delete-selected-button"
-            onClick={onDeleteSelected}
-            aria-label="Delete selected code blocks"
-          >
-            <DeleteIcon />
-          </button>
-        </Tooltip>
-      )}
-    </div>
   );
 };
 
