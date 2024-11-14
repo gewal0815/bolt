@@ -63,7 +63,8 @@
     display: flex;
   }
 
-  &.has-selection .submit-button {
+  &.has-selection .submit-button,
+  &.has-selection .delete-selected-button {
     display: flex;
   }
 }
@@ -315,6 +316,11 @@
         color: #2e7d32;
       }
     }
+
+    /* Display Delete Button Only When Selected */
+    .delete-code-button {
+      display: flex;
+    }
   }
 }
 
@@ -326,6 +332,17 @@
   display: flex;
   gap: 6px;
   align-items: center;
+  /* Ensure all buttons are aligned consistently */
+  .select-code-button,
+  .copy-code-button,
+  .delete-code-button {
+    margin: 0; /* Remove any individual margins for consistency */
+  }
+
+  /* Hide Delete Button by Default */
+  .delete-code-button {
+    display: none;
+  }
 }
 
 /* Bottom Buttons Container */
@@ -393,14 +410,14 @@
   background: rgba(255, 0, 0, 0.1);
   color: #ff4d4d;
   padding: 6px;
-  display: flex;
+  display: none; /* Hidden by default, shown when selected */
   align-items: center;
   justify-content: center;
   width: 32px;
   height: 32px;
   border-radius: 50%;
   transition: background-color 0.3s, transform 0.2s;
-  margin-top: 8px;
+  /* Remove margin-top for consistent alignment */
 
   &:focus {
     outline: none;
@@ -416,6 +433,16 @@
     width: 20px;
     height: 20px;
     fill: currentColor;
+  }
+}
+
+/* Code Block Container with Selected State */
+.code-block-container.selected {
+  /* Overlay and button styles already handled above */
+
+  /* Ensure the delete button is visible */
+  .delete-code-button {
+    display: flex;
   }
 }
 
@@ -583,11 +610,6 @@
     height: 20px;
     fill: currentColor;
   }
-}
-
-/* Show Delete Selected Button When Needed */
-.chat-interface.has-selection .delete-selected-button {
-  display: flex;
 }
 
 /* Drag Label */
