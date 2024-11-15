@@ -1,6 +1,6 @@
 // frontend/src/components/ChatInterface.tsx
 
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import Draggable, { type DraggableData, type DraggableEvent } from 'react-draggable';
 import { v4 as uuidv4 } from 'uuid';
 import Switch from '@mui/material/Switch';
@@ -13,6 +13,7 @@ import RestoreIcon from '@mui/icons-material/Restore';
 import InsertPhotoIcon from '@mui/icons-material/InsertPhoto';
 import InsertEmoticonIcon from '@mui/icons-material/InsertEmoticon';
 import SendIcon from '@mui/icons-material/Send';
+import StopIcon from '@mui/icons-material/Stop';
 import DeleteIcon from '@mui/icons-material/Delete';
 import BookmarkAddedIcon from '@mui/icons-material/BookmarkAdded';
 
@@ -25,7 +26,7 @@ interface Part {
   id: string;
   content: string;
   language?: string;
-  messageId: string; // Changed to string
+  messageId: string;
 }
 
 interface Message {
@@ -59,6 +60,9 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ onClose }) => {
   const messageEndRef = useRef<HTMLDivElement>(null);
   const chatRef = useRef<HTMLDivElement>(null);
   const [position, setPosition] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
+  const [isStreamMode, setIsStreamMode] = useState<boolean>(true); // Toggle for Stream Mode
+  const abortControllerRef = useRef<AbortController | null>(null); // Reference to AbortController
+  const isStoppedRef = useRef<boolean>(false); // Ref to indicate if the process is stopped
 
   const sessionId = localStorage.getItem('sessionId') || uuidv4();
 
@@ -96,6 +100,9 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ onClose }) => {
     if (!inputValue.trim()) return;
 
     setIsLoading(true);
+    setLoadingStage('thinking'); // Start with 'thinking' phase
+    isStoppedRef.current = false; // Reset the stopped flag
+    abortControllerRef.current = new AbortController(); // Initialize AbortController
 
     try {
       const response = await fetch('http://localhost:5000/api/messages', {
@@ -105,6 +112,7 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ onClose }) => {
           'Session-ID': sessionId,
         },
         body: JSON.stringify({ text: inputValue }),
+        signal: abortControllerRef.current.signal, // Attach the signal for aborting
       });
 
       if (!response.ok) throw new Error(`Message send error: ${response.statusText}`);
@@ -125,11 +133,27 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ onClose }) => {
       // Fetch AI response
       await getAIResponse(inputValue);
     } catch (error) {
-      console.error('Error sending message:', error);
-      // Optionally, display an error message to the user
+      if ((error as any).name === 'AbortError') {
+        console.log('Message sending aborted.');
+      } else {
+        console.error('Error sending message:', error);
+        // Optionally, display an error message to the user
+      }
       setLoadingStage('idle');
       setIsLoading(false);
     }
+  };
+
+  /**
+   * Handles stopping the ongoing AI response fetching or streaming.
+   */
+  const handleStop = () => {
+    isStoppedRef.current = true; // Set the stopped flag to true
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort(); // Abort the fetch request
+    }
+    setLoadingStage('idle');
+    setIsLoading(false);
   };
 
   /**
@@ -162,6 +186,7 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ onClose }) => {
           'Session-ID': sessionId,
         },
         body: JSON.stringify({ input: { sessionId: sessionId, chatInput: chatInput } }),
+        signal: abortControllerRef.current?.signal, // Attach the signal for aborting
       });
 
       if (!response.ok) throw new Error(`AI Webhook error: ${response.statusText}`);
@@ -175,7 +200,7 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ onClose }) => {
         const decoder = new TextDecoder('utf-8');
         let done = false;
 
-        while (!done) {
+        while (!done && !isStoppedRef.current) {
           const { value, done: readerDone } = await reader.read();
           if (value) {
             const chunk = decoder.decode(value, { stream: true });
@@ -196,64 +221,98 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ onClose }) => {
           done = readerDone;
         }
 
-        // Finalize the AI message after the stream is complete
+        if (!isStoppedRef.current) {
+          // Set loading stage to 'preparing' after streaming completes
+          setLoadingStage('preparing');
+
+          // Start streaming simulation during 'preparing' phase
+          await simulateStreamingSimultaneous(tempAiMessageId);
+
+          // After preparing phase, set to 'idle'
+          setLoadingStage('idle');
+          setIsLoading(false);
+        }
+      } else {
+        // If streaming is not supported or 'No Stream' mode is active
+        const data: any = await response.json();
+        const aiFullText = data.output || 'No response from AI.';
+
+        if (!isStreamMode) {
+          // In 'No Stream' mode, display the full response instantly
+          setMessages((prevMessages) =>
+            prevMessages.map((msg) =>
+              msg.id === tempAiMessageId
+                ? {
+                    ...msg,
+                    text: aiFullText,
+                    parts: parseMessageText(aiFullText, msg.id),
+                  }
+                : msg,
+            ),
+          );
+
+          // Set loading stage to 'preparing' and simulate delay
+          setLoadingStage('preparing');
+          await new Promise((resolve) => setTimeout(resolve, 1000));
+
+          // After preparing phase, set to 'idle'
+          setLoadingStage('idle');
+          setIsLoading(false);
+        } else {
+          // In 'Stream' mode without actual streaming, simulate streaming during 'preparing' phase
+          setLoadingStage('preparing');
+          await simulateStreamingSimultaneous(tempAiMessageId, aiFullText);
+
+          // After preparing phase, set to 'idle'
+          setLoadingStage('idle');
+          setIsLoading(false);
+        }
+      }
+    } catch (error) {
+      if ((error as any).name === 'AbortError') {
+        console.log('AI response fetching aborted.');
+        // Remove the temporary AI message if aborted
+        setMessages((prevMessages) => prevMessages.filter((msg) => msg.id !== tempAiMessageId));
+      } else {
+        console.error('Error fetching AI response:', error);
+
+        // Update the AI message with an error message
         setMessages((prevMessages) =>
           prevMessages.map((msg) =>
             msg.id === tempAiMessageId
               ? {
                   ...msg,
-                  parts: parseMessageText(msg.text, msg.id),
+                  text: 'Error processing your request.',
+                  parts: parseMessageText('Error processing your request.', msg.id),
                 }
               : msg,
           ),
         );
-
-        // Set loading stage to 'preparing' after AI response is fully received
-        setLoadingStage('preparing');
-      } else {
-        // If streaming is not supported, simulate streaming
-        const data: any = await response.json();
-        const aiFullText = data.output || 'No response from AI.';
-
-        // Set loading stage to 'preparing' after AI response is received
-        setLoadingStage('preparing');
-
-        // Simulate streaming
-        await simulateStreaming(aiFullText, tempAiMessageId);
       }
-    } catch (error) {
-      console.error('Error fetching AI response:', error);
 
-      // Update the AI message with an error message
-      setMessages((prevMessages) =>
-        prevMessages.map((msg) =>
-          msg.id === tempAiMessageId
-            ? {
-                ...msg,
-                text: 'Error processing your request.',
-                parts: parseMessageText('Error processing your request.', msg.id),
-              }
-            : msg,
-        ),
-      );
-
-      // Set loading stage to 'preparing' even in case of error
-      setLoadingStage('preparing');
+      // Set loading stage to 'idle' in case of error
+      setLoadingStage('idle');
+      setIsLoading(false);
+      return;
     }
 
-    // After all loading stages, set to 'idle'
-    setLoadingStage('idle');
-    setIsLoading(false);
+    if (!isStoppedRef.current && loadingStage !== 'idle') {
+      // Ensure that loadingStage is set to 'idle' only if not stopped
+      setLoadingStage('idle');
+      setIsLoading(false);
+    }
   };
 
   /**
-   * Simulates streaming by revealing the AI response one chunk at a time.
-   * @param text The full AI response text.
+   * Simulates streaming by revealing the AI response one chunk at a time during 'preparing' phase.
    * @param messageId The ID of the AI message to update.
+   * @param fullText (Optional) The full AI response text for non-streaming scenarios.
    */
-  const simulateStreaming = async (text: string, messageId: string) => {
-    const chunkSize = 8; // Number of characters per interval
-    for (let i = 0; i < text.length; i += chunkSize) {
+  const simulateStreamingSimultaneous = async (messageId: string, fullText?: string) => {
+    const text = fullText || messages.find((msg) => msg.id === messageId)?.text || '';
+    const chunkSize = 15; // Number of characters per interval
+
+    for (let i = 0; i < text.length && !isStoppedRef.current; i += chunkSize) {
       // Determine the end index for the current chunk
       const end = Math.min(i + chunkSize, text.length);
       const currentText = text.substring(0, end);
@@ -485,6 +544,10 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ onClose }) => {
    */
   const handleDeleteSelectedCodeBlocks = async () => {
     setIsLoading(true);
+    setLoadingStage('preparing'); // Start 'preparing' phase for deletion
+    isStoppedRef.current = false; // Reset the stopped flag
+    abortControllerRef.current = new AbortController(); // Initialize AbortController
+
     try {
       // Delete all selected code blocks sequentially
       for (const block of selectedCodeBlocks) {
@@ -500,6 +563,7 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ onClose }) => {
       console.error('Error deleting selected code blocks:', error);
       // Optionally, display an error message to the user
     } finally {
+      setLoadingStage('idle');
       setIsLoading(false);
     }
   };
@@ -741,6 +805,11 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ onClose }) => {
         return (
           <div className="loading-indicator preparing">
             <span>Preparing response...</span>
+            <div className="loading-dots">
+              <span className="dot"></span>
+              <span className="dot"></span>
+              <span className="dot"></span>
+            </div>
           </div>
         );
       case 'idle':
@@ -758,6 +827,10 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ onClose }) => {
         ref={chatRef}
       >
         <div className="chat-header">
+          <div className="chat-header-left">
+            <span>Stream Mode</span>
+            <Switch checked={isStreamMode} onChange={() => setIsStreamMode((prev) => !prev)} />
+          </div>
           <h1 className="chat-title">Chat Interface</h1>
           <div className="chat-header-controls">
             <span>{isDarkMode ? 'Dark Mode' : 'Light Mode'}</span>
@@ -778,7 +851,7 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ onClose }) => {
               style={message.sender === 'ai' ? { maxWidth: `${aiResponseWidth}%` } : {}}
             >
               <div>{renderMessage(message)}</div>
-              {message.sender === 'ai' && (
+              {message.sender === 'ai' && loadingStage !== 'preparing' && (
                 <div className="chat-message-timestamp">{new Date(message.timestamp).toLocaleString()}</div>
               )}
             </div>
@@ -796,9 +869,15 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ onClose }) => {
             onKeyDown={handleKeyDown}
             disabled={isLoading}
           />
-          <button onClick={handleSend} className="chat-send-button" disabled={isLoading}>
-            Send
-          </button>
+          {isLoading ? (
+            <button onClick={handleStop} className="chat-send-button stop-button" aria-label="Stop">
+              <StopIcon />
+            </button>
+          ) : (
+            <button onClick={handleSend} className="chat-send-button" disabled={isLoading} aria-label="Send">
+              <SendIcon />
+            </button>
+          )}
         </div>
 
         <ExtensionHandle

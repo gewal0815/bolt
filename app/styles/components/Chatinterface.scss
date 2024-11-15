@@ -109,6 +109,15 @@
     }
   }
 
+  .stop-button {
+    background-color: #d93025; /* Google Red for Stop */
+    color: #ffffff;
+
+    &:hover {
+      background-color: #c5221f;
+    }
+  }
+
   .chat-message-user {
     background-color: var(--color-primary);
     color: #ffffff;
@@ -182,6 +191,15 @@
     }
   }
 
+  .stop-button {
+    background-color: #d93025; /* Google Red for Stop */
+    color: #ffffff;
+
+    &:hover {
+      background-color: #c5221f;
+    }
+  }
+
   .chat-message-user {
     background-color: var(--color-primary);
     color: #ffffff;
@@ -234,6 +252,27 @@
   cursor: move;
   background-color: var(--color-header-light);
   transition: background-color 0.3s, color 0.3s;
+
+  .chat-header-left {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: var(--font-size-small);
+  }
+
+  .chat-title {
+    flex-grow: 1;
+    text-align: center;
+    font-size: var(--font-size-large);
+    margin: 0;
+  }
+
+  .chat-header-controls {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: var(--font-size-small);
+  }
 }
 
 /* Chat Messages Area */
@@ -307,14 +346,13 @@
 
 /* Loading Indicator */
 .loading-indicator {
-  text-align: center;
-  font-style: italic;
-  color: #888;
-  margin: var(--spacing-small) 0;
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 4px;
+  gap: 10px;
+  font-style: italic;
+  color: #888;
+  margin: var(--spacing-small) 0;
 }
 
 .loading-indicator.preparing {
@@ -322,48 +360,45 @@
   animation: fadeIn 1s forwards;
 }
 
-/* Ellipsis Animation */
-.loading-ellipsis {
-  display: inline-block;
-  position: relative;
-  width: 20px;
-  height: 20px;
+/* Loading Dots Container */
+.loading-dots {
+  display: flex;
+  align-items: center;
+  gap: 6px;
 }
 
-.loading-ellipsis::after,
-.loading-ellipsis::before {
-  content: '';
-  position: absolute;
-  top: 0;
-  width: 6px;
-  height: 6px;
+/* Individual Dot Styling */
+.loading-dots .dot {
+  width: 10px;
+  height: 10px;
   background-color: currentColor;
   border-radius: 50%;
-  animation: ellipsis 1.5s infinite;
+  opacity: 0.6;
+  animation: pulse 1.4s infinite ease-in-out;
 }
 
-.loading-ellipsis::before {
-  left: 0;
-  animation-delay: 0.3s;
+/* Staggered Animation Delays for Each Dot */
+.loading-dots .dot:nth-child(1) {
+  animation-delay: -0.32s;
 }
 
-.loading-ellipsis::after {
-  right: 0;
-  animation-delay: 0.6s;
+.loading-dots .dot:nth-child(2) {
+  animation-delay: -0.16s;
 }
 
-@keyframes ellipsis {
-  0% {
+.loading-dots .dot:nth-child(3) {
+  animation-delay: 0s;
+}
+
+/* Keyframes for Pulsating Effect */
+@keyframes pulse {
+  0%, 80%, 100% {
     transform: scale(0.8);
-    opacity: 0.5;
+    opacity: 0.6;
   }
-  50% {
-    transform: scale(1);
+  40% {
+    transform: scale(1.2);
     opacity: 1;
-  }
-  100% {
-    transform: scale(0.8);
-    opacity: 0.5;
   }
 }
 
@@ -587,6 +622,33 @@
       box-shadow: 0 0 0 2px var(--color-primary);
     }
   }
+
+  .stop-button {
+    background-color: #d93025; /* Google Red for Stop */
+    color: #ffffff;
+    margin-left: var(--spacing-medium);
+    padding: 10px 16px;
+    border-radius: var(--border-radius-small);
+    cursor: pointer;
+    border: none;
+    font-size: var(--font-size-base);
+    font-weight: var(--font-weight-bold);
+    transition: background-color 0.3s, transform 0.2s;
+
+    &:hover {
+      background-color: #c5221f;
+      transform: translateY(-2px);
+    }
+
+    &:active {
+      transform: translateY(0);
+    }
+
+    &:focus {
+      outline: none;
+      box-shadow: 0 0 0 2px rgba(217, 48, 37, 0.5);
+    }
+  }
 }
 
 /* Fixed Extension Handle */
@@ -768,66 +830,6 @@
     fill: currentColor;
   }
 }
-/* Loading Indicator Container */
-.loading-indicator {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 10px;
-  font-style: italic;
-  color: #888;
-  margin: var(--spacing-small) 0;
-}
-
-/* Loading Dots Container */
-.loading-dots {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-}
-
-/* Individual Dot Styling */
-.loading-dots .dot {
-  width: 10px;
-  height: 10px;
-  background-color: currentColor;
-  border-radius: 50%;
-  opacity: 0.6;
-  animation: pulse 1.4s infinite ease-in-out;
-}
-
-/* Staggered Animation Delays for Each Dot */
-.loading-dots .dot:nth-child(1) {
-  animation-delay: -0.32s;
-}
-
-.loading-dots .dot:nth-child(2) {
-  animation-delay: -0.16s;
-}
-
-.loading-dots .dot:nth-child(3) {
-  animation-delay: 0s;
-}
-
-/* Keyframes for Pulsating Effect */
-@keyframes pulse {
-  0%, 80%, 100% {
-    transform: scale(0.8);
-    opacity: 0.6;
-  }
-  40% {
-    transform: scale(1.2);
-    opacity: 1;
-  }
-}
-
-
-/* Keyframes for Fade In Animation */
-@keyframes fadeIn {
-  to {
-    opacity: 1;
-  }
-}
 
 /* Responsive Design */
 @media (max-width: 768px) {
@@ -842,11 +844,26 @@
     .chat-title {
       font-size: 16px;
     }
+
+    .chat-header-left,
+    .chat-header-controls {
+      flex-direction: column;
+      align-items: flex-start;
+      gap: 4px;
+    }
   }
 
-  .chat-send-button {
+  .chat-send-button,
+  .stop-button {
     padding: 8px 12px;
     font-size: 14px;
+    width: 40px;
+    height: 40px;
+
+    svg {
+      width: 20px;
+      height: 20px;
+    }
   }
 
   .chat-input {
@@ -878,5 +895,15 @@
   .extension-handle-grey-line,
   .extension-handle-grey-line-bottom {
     width: 30px;
+  }
+}
+
+/* Send Button Specific Styles */
+.chat-send-button.stop-button {
+  background-color: #d93025; /* Google Red for Stop */
+  color: #ffffff;
+
+  &:hover {
+    background-color: #c5221f;
   }
 }
