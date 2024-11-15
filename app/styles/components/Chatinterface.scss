@@ -1,4 +1,4 @@
-/* frontend/src/components/ChatInterface.scss */
+/* frontend/src/components/ChatInterface.css */
 
 /* Root Variables for Consistent Theming */
 :root {
@@ -135,6 +135,11 @@
     background-color: #2e3440;
     border: 1px solid #3c3c3c;
   }
+
+  .loading-indicator.preparing {
+    opacity: 0;
+    animation: fadeIn 1s forwards;
+  }
 }
 
 /* Light Mode Styling */
@@ -202,6 +207,18 @@
   .code-block-container {
     background-color: #f5f5f5;
     border: 1px solid #e0e0e0;
+  }
+
+  .loading-indicator.preparing {
+    opacity: 0;
+    animation: fadeIn 1s forwards;
+  }
+}
+
+/* Keyframes for Fade In Animation */
+@keyframes fadeIn {
+  to {
+    opacity: 1;
   }
 }
 
@@ -288,6 +305,68 @@
   }
 }
 
+/* Loading Indicator */
+.loading-indicator {
+  text-align: center;
+  font-style: italic;
+  color: #888;
+  margin: var(--spacing-small) 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+}
+
+.loading-indicator.preparing {
+  opacity: 0;
+  animation: fadeIn 1s forwards;
+}
+
+/* Ellipsis Animation */
+.loading-ellipsis {
+  display: inline-block;
+  position: relative;
+  width: 20px;
+  height: 20px;
+}
+
+.loading-ellipsis::after,
+.loading-ellipsis::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  width: 6px;
+  height: 6px;
+  background-color: currentColor;
+  border-radius: 50%;
+  animation: ellipsis 1.5s infinite;
+}
+
+.loading-ellipsis::before {
+  left: 0;
+  animation-delay: 0.3s;
+}
+
+.loading-ellipsis::after {
+  right: 0;
+  animation-delay: 0.6s;
+}
+
+@keyframes ellipsis {
+  0% {
+    transform: scale(0.8);
+    opacity: 0.5;
+  }
+  50% {
+    transform: scale(1);
+    opacity: 1;
+  }
+  100% {
+    transform: scale(0.8);
+    opacity: 0.5;
+  }
+}
+
 /* Code Block Container */
 .code-block-container {
   position: relative;
@@ -299,6 +378,8 @@
   overflow: hidden;
 
   &.selected {
+    border: 2px solid green;
+
     &::before {
       content: '';
       position: absolute;
@@ -332,27 +413,11 @@
   display: flex;
   gap: 6px;
   align-items: center;
-  /* Ensure all buttons are aligned consistently */
-  .select-code-button,
-  .copy-code-button,
-  .delete-code-button {
-    margin: 0; /* Remove any individual margins for consistency */
-  }
 
   /* Hide Delete Button by Default */
   .delete-code-button {
     display: none;
   }
-}
-
-/* Bottom Buttons Container */
-.code-block-buttons-bottom {
-  position: absolute;
-  bottom: 10px;
-  left: 10px;
-  display: flex;
-  align-items: center;
-  gap: 6px;
 }
 
 /* Select and Copy Buttons in Code Block */
@@ -417,7 +482,7 @@
   height: 32px;
   border-radius: 50%;
   transition: background-color 0.3s, transform 0.2s;
-  /* Remove margin-top for consistent alignment */
+  margin-top: 10px;
 
   &:focus {
     outline: none;
@@ -433,16 +498,6 @@
     width: 20px;
     height: 20px;
     fill: currentColor;
-  }
-}
-
-/* Code Block Container with Selected State */
-.code-block-container.selected {
-  /* Overlay and button styles already handled above */
-
-  /* Ensure the delete button is visible */
-  .delete-code-button {
-    display: flex;
   }
 }
 
@@ -529,7 +584,7 @@
 
     &:focus {
       outline: none;
-      box-shadow: 0 0 0 2px rgba(26, 115, 232, 0.5);
+      box-shadow: 0 0 0 2px var(--color-primary);
     }
   }
 }
@@ -713,13 +768,65 @@
     fill: currentColor;
   }
 }
-
-/* Loading Indicator */
-.chat-loading-indicator {
-  text-align: center;
+/* Loading Indicator Container */
+.loading-indicator {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
   font-style: italic;
   color: #888;
   margin: var(--spacing-small) 0;
+}
+
+/* Loading Dots Container */
+.loading-dots {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+/* Individual Dot Styling */
+.loading-dots .dot {
+  width: 10px;
+  height: 10px;
+  background-color: currentColor;
+  border-radius: 50%;
+  opacity: 0.6;
+  animation: pulse 1.4s infinite ease-in-out;
+}
+
+/* Staggered Animation Delays for Each Dot */
+.loading-dots .dot:nth-child(1) {
+  animation-delay: -0.32s;
+}
+
+.loading-dots .dot:nth-child(2) {
+  animation-delay: -0.16s;
+}
+
+.loading-dots .dot:nth-child(3) {
+  animation-delay: 0s;
+}
+
+/* Keyframes for Pulsating Effect */
+@keyframes pulse {
+  0%, 80%, 100% {
+    transform: scale(0.8);
+    opacity: 0.6;
+  }
+  40% {
+    transform: scale(1.2);
+    opacity: 1;
+  }
+}
+
+
+/* Keyframes for Fade In Animation */
+@keyframes fadeIn {
+  to {
+    opacity: 1;
+  }
 }
 
 /* Responsive Design */

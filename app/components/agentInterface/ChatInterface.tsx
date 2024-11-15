@@ -1,6 +1,6 @@
 // frontend/src/components/ChatInterface.tsx
 
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import Draggable, { type DraggableData, type DraggableEvent } from 'react-draggable';
 import { v4 as uuidv4 } from 'uuid';
 import Switch from '@mui/material/Switch';
@@ -16,6 +16,10 @@ import SendIcon from '@mui/icons-material/Send';
 import DeleteIcon from '@mui/icons-material/Delete';
 import BookmarkAddedIcon from '@mui/icons-material/BookmarkAdded';
 
+// Define the stages of loading
+type LoadingStage = 'idle' | 'thinking' | 'preparing';
+
+// Interfaces
 interface Part {
   type: 'text' | 'code';
   id: string;
@@ -46,6 +50,7 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ onClose }) => {
   const [messages, setMessages] = useState<Message[]>([]);
   const [inputValue, setInputValue] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [loadingStage, setLoadingStage] = useState<LoadingStage>('idle');
   const [isDarkMode, setIsDarkMode] = useState(false);
   const [aiResponseWidth, setAiResponseWidth] = useState<number>(60);
   const originalWidth = 60;
@@ -84,6 +89,9 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ onClose }) => {
     messageEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
 
+  /**
+   * Handles sending of user messages.
+   */
   const handleSend = async () => {
     if (!inputValue.trim()) return;
 
@@ -101,7 +109,7 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ onClose }) => {
 
       if (!response.ok) throw new Error(`Message send error: ${response.statusText}`);
 
-      const data:any= await response.json();
+      const data: any = await response.json();
 
       const userMessage: Message = {
         id: String(data.messageId), // Ensure ID is a string
@@ -114,12 +122,12 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ onClose }) => {
       setMessages((prev) => [...prev, userMessage]);
       setInputValue('');
 
-      // Fetch AI response after sending user message
+      // Fetch AI response
       await getAIResponse(inputValue);
     } catch (error) {
       console.error('Error sending message:', error);
       // Optionally, display an error message to the user
-    } finally {
+      setLoadingStage('idle');
       setIsLoading(false);
     }
   };
@@ -128,6 +136,9 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ onClose }) => {
    * Refactored getAIResponse function to handle streaming and simulated streaming.
    */
   const getAIResponse = async (chatInput: string) => {
+    // Set loading stage to 'thinking' when AI response starts
+    setLoadingStage('thinking');
+
     // Create a unique temporary ID for the AI message
     const tempAiMessageId = uuidv4();
 
@@ -178,8 +189,8 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ onClose }) => {
                       text: msg.text + chunk,
                       parts: parseMessageText(msg.text + chunk, msg.id),
                     }
-                  : msg
-              )
+                  : msg,
+              ),
             );
           }
           done = readerDone;
@@ -193,13 +204,21 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ onClose }) => {
                   ...msg,
                   parts: parseMessageText(msg.text, msg.id),
                 }
-              : msg
-          )
+              : msg,
+          ),
         );
+
+        // Set loading stage to 'preparing' after AI response is fully received
+        setLoadingStage('preparing');
       } else {
         // If streaming is not supported, simulate streaming
-        const data:any = await response.json();
+        const data: any = await response.json();
         const aiFullText = data.output || 'No response from AI.';
+
+        // Set loading stage to 'preparing' after AI response is received
+        setLoadingStage('preparing');
+
+        // Simulate streaming
         await simulateStreaming(aiFullText, tempAiMessageId);
       }
     } catch (error) {
@@ -214,16 +233,21 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ onClose }) => {
                 text: 'Error processing your request.',
                 parts: parseMessageText('Error processing your request.', msg.id),
               }
-            : msg
-        )
+            : msg,
+        ),
       );
-    } finally {
-      setIsLoading(false);
+
+      // Set loading stage to 'preparing' even in case of error
+      setLoadingStage('preparing');
     }
+
+    // After all loading stages, set to 'idle'
+    setLoadingStage('idle');
+    setIsLoading(false);
   };
 
   /**
-   * Simulates streaming by revealing the AI response one character at a time.
+   * Simulates streaming by revealing the AI response one chunk at a time.
    * @param text The full AI response text.
    * @param messageId The ID of the AI message to update.
    */
@@ -241,10 +265,10 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ onClose }) => {
                 text: currentText,
                 parts: parseMessageText(currentText, msg.id),
               }
-            : msg
-        )
+            : msg,
+        ),
       );
-      // Adjust delay as needed
+      // Adjust delay as needed for a faster streaming effect
       await new Promise((resolve) => setTimeout(resolve, 5));
     }
   };
@@ -283,11 +307,11 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ onClose }) => {
   const toggleCodeBlockSelection = (selectedBlock: SelectedCodeBlock) => {
     setSelectedCodeBlocks((prev) => {
       const exists = prev.find(
-        (block) => block.partId === selectedBlock.partId && block.messageId === selectedBlock.messageId
+        (block) => block.partId === selectedBlock.partId && block.messageId === selectedBlock.messageId,
       );
       if (exists) {
         return prev.filter(
-          (block) => !(block.partId === selectedBlock.partId && block.messageId === selectedBlock.messageId)
+          (block) => !(block.partId === selectedBlock.partId && block.messageId === selectedBlock.messageId),
         );
       } else {
         return [...prev, selectedBlock];
@@ -297,16 +321,13 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ onClose }) => {
 
   const fetchMessageHistory = async () => {
     try {
-      const response = await fetch(
-        `http://localhost:5000/api/messages?time_period=1 month`,
-        {
-          method: 'GET',
-          headers: {
-            'Content-Type': 'application/json',
-            'Session-ID': sessionId,
-          },
-        }
-      );
+      const response = await fetch(`http://localhost:5000/api/messages?time_period=1 month`, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+          'Session-ID': sessionId,
+        },
+      });
 
       if (!response.ok) {
         throw new Error(`Backend GET error: ${response.statusText}`);
@@ -326,6 +347,9 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ onClose }) => {
     }
   };
 
+  /**
+   * Renders individual messages with proper formatting.
+   */
   const renderMessage = (message: Message) => {
     if (!message.parts || !message.sender) {
       return <span style={{ color: 'red' }}>Invalid message data.</span>;
@@ -334,7 +358,7 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ onClose }) => {
     return message.parts.map((part) => {
       if (part.type === 'code') {
         const isSelected = selectedCodeBlocks.some(
-          (block) => block.partId === part.id && block.messageId === part.messageId
+          (block) => block.partId === part.id && block.messageId === part.messageId,
         );
         return (
           <CodeBlockWithCopy
@@ -364,6 +388,9 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ onClose }) => {
     });
   };
 
+  /**
+   * Parses message text into parts, distinguishing between text and code blocks.
+   */
   const parseMessageText = (text: string, messageId: string): Part[] => {
     if (!text) {
       return [{ type: 'text', id: uuidv4(), content: 'No message content available.', messageId }];
@@ -407,6 +434,9 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ onClose }) => {
     return result;
   };
 
+  /**
+   * Handles deletion of individual code blocks.
+   */
   const handleDeleteCodeBlock = async (messageId: string, partId: string) => {
     try {
       const message = messages.find((msg) => msg.id === messageId);
@@ -425,7 +455,7 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ onClose }) => {
       });
 
       if (!response.ok) {
-        const errorData:any = await response.json();
+        const errorData: any = await response.json();
         throw new Error(`Delete error: ${errorData.message || response.statusText}`);
       }
 
@@ -434,7 +464,7 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ onClose }) => {
 
       // Optionally, remove the deleted code block from selectedCodeBlocks
       setSelectedCodeBlocks((prev) =>
-        prev.filter((block) => !(block.messageId === messageId && block.partId === partId))
+        prev.filter((block) => !(block.messageId === messageId && block.partId === partId)),
       );
     } catch (error) {
       console.error('Error deleting code block:', error);
@@ -442,11 +472,17 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ onClose }) => {
     }
   };
 
+  /**
+   * Handles submission of selected code blocks.
+   */
   const handleSubmitSelected = () => {
     console.log('Submitting selected code blocks:', selectedCodeBlocks);
     // Implement submission logic as needed
   };
 
+  /**
+   * Handles deletion of all selected code blocks.
+   */
   const handleDeleteSelectedCodeBlocks = async () => {
     setIsLoading(true);
     try {
@@ -468,6 +504,9 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ onClose }) => {
     }
   };
 
+  /**
+   * Component for displaying code blocks with copy and delete functionalities.
+   */
   interface CodeBlockWithCopyProps {
     id: string;
     code: string;
@@ -498,7 +537,7 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ onClose }) => {
         },
         (err) => {
           console.error('Could not copy text: ', err);
-        }
+        },
       );
     };
 
@@ -555,6 +594,9 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ onClose }) => {
     );
   };
 
+  /**
+   * Component for the extension handle with resizing and action buttons.
+   */
   interface ExtensionHandleProps {
     onExtend: (newWidthPercentage: number) => void;
     isDarkMode: boolean;
@@ -625,11 +667,7 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ onClose }) => {
 
         {showResetButton && (
           <Tooltip title="Reset to Default" placement="left" arrow>
-            <button
-              className="reset-width-button"
-              onClick={onReset}
-              aria-label="Reset AI Response Width"
-            >
+            <button className="reset-width-button" onClick={onReset} aria-label="Reset AI Response Width">
               <RestoreIcon />
             </button>
           </Tooltip>
@@ -663,11 +701,7 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ onClose }) => {
         {selectedCount > 0 && (
           <>
             <Tooltip title="Submit selected code blocks" placement="left" arrow>
-              <button
-                className="submit-button"
-                onClick={onSubmit}
-                aria-label="Submit selected code blocks"
-              >
+              <button className="submit-button" onClick={onSubmit} aria-label="Submit selected code blocks">
                 <SendIcon />
               </button>
             </Tooltip>
@@ -685,6 +719,34 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ onClose }) => {
         )}
       </div>
     );
+  };
+
+  /**
+   * Renders the loading indicator based on the current loading stage.
+   */
+  const renderLoadingIndicator = () => {
+    switch (loadingStage) {
+      case 'thinking':
+        return (
+          <div className="loading-indicator">
+            <span>Thinking</span>
+            <div className="loading-dots">
+              <span className="dot"></span>
+              <span className="dot"></span>
+              <span className="dot"></span>
+            </div>
+          </div>
+        );
+      case 'preparing':
+        return (
+          <div className="loading-indicator preparing">
+            <span>Preparing response...</span>
+          </div>
+        );
+      case 'idle':
+      default:
+        return null;
+    }
   };
 
   return (
@@ -717,13 +779,11 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ onClose }) => {
             >
               <div>{renderMessage(message)}</div>
               {message.sender === 'ai' && (
-                <div className="chat-message-timestamp">
-                  {new Date(message.timestamp).toLocaleString()}
-                </div>
+                <div className="chat-message-timestamp">{new Date(message.timestamp).toLocaleString()}</div>
               )}
             </div>
           ))}
-          {isLoading && <div className="chat-loading-indicator">Thinking...</div>}
+          {isLoading && renderLoadingIndicator()}
           <div ref={messageEndRef} />
         </div>
 
