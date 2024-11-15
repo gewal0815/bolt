@@ -1,6 +1,6 @@
 // frontend/src/components/ChatInterface.tsx
 
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import Draggable, { DraggableData, DraggableEvent } from 'react-draggable';
 import { v4 as uuidv4 } from 'uuid';
 import Switch from '@mui/material/Switch';
@@ -21,11 +21,11 @@ interface Part {
   id: string;
   content: string;
   language?: string;
-  messageId: number;
+  messageId: string; // Changed to string
 }
 
 interface Message {
-  id: number;
+  id: string; // Changed to string to accommodate temporary UUIDs
   sender: 'user' | 'ai';
   text: string;
   timestamp: string;
@@ -33,7 +33,7 @@ interface Message {
 }
 
 interface SelectedCodeBlock {
-  messageId: number;
+  messageId: string;
   partId: string;
   code: string;
 }
@@ -104,11 +104,11 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ onClose }) => {
       const data = await response.json();
 
       const userMessage: Message = {
-        id: data.messageId, // Use the ID returned by the backend
+        id: String(data.messageId), // Ensure ID is a string
         sender: 'user',
         text: inputValue,
         timestamp: new Date().toISOString(),
-        parts: parseMessageText(inputValue, data.messageId),
+        parts: parseMessageText(inputValue, String(data.messageId)),
       };
 
       setMessages((prev) => [...prev, userMessage]);
@@ -118,12 +118,31 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ onClose }) => {
       await getAIResponse(inputValue);
     } catch (error) {
       console.error('Error sending message:', error);
+      // Optionally, display an error message to the user
     } finally {
       setIsLoading(false);
     }
   };
 
+  /**
+   * Refactored getAIResponse function to handle streaming and simulated streaming.
+   */
   const getAIResponse = async (chatInput: string) => {
+    // Create a unique temporary ID for the AI message
+    const tempAiMessageId = uuidv4();
+
+    // Initialize a new AI message with empty content
+    const initialAiMessage: Message = {
+      id: tempAiMessageId,
+      sender: 'ai',
+      text: '',
+      timestamp: new Date().toISOString(),
+      parts: [],
+    };
+
+    // Add the initial AI message to the messages state
+    setMessages((prev) => [...prev, initialAiMessage]);
+
     try {
       const response = await fetch('http://localhost:5678/webhook/e4498659-6af2-480b-9578-0382d998f73a', {
         method: 'POST',
@@ -136,31 +155,95 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ onClose }) => {
 
       if (!response.ok) throw new Error(`AI Webhook error: ${response.statusText}`);
 
-      const data = await response.json();
+      const contentType = response.headers.get('Content-Type') || '';
+      const isStream = response.body && response.headers.get('Transfer-Encoding') === 'chunked';
 
-      const aiMessageId = data.messageId;
+      if (isStream && response.body) {
+        // Handle streaming response
+        const reader = response.body.getReader();
+        const decoder = new TextDecoder('utf-8');
+        let done = false;
 
-      const aiMessage: Message = {
-        id: aiMessageId,
-        sender: 'ai',
-        text: data.output || 'No response from AI.',
-        timestamp: new Date().toISOString(),
-        parts: parseMessageText(data.output || 'No response from AI.', aiMessageId),
-      };
+        while (!done) {
+          const { value, done: readerDone } = await reader.read();
+          if (value) {
+            const chunk = decoder.decode(value, { stream: true });
 
-      setMessages((prev) => [...prev, aiMessage]);
+            // Append the chunk to the AI message
+            setMessages((prevMessages) =>
+              prevMessages.map((msg) =>
+                msg.id === tempAiMessageId
+                  ? {
+                      ...msg,
+                      text: msg.text + chunk,
+                      parts: parseMessageText(msg.text + chunk, msg.id),
+                    }
+                  : msg
+              )
+            );
+          }
+          done = readerDone;
+        }
+
+        // Finalize the AI message after the stream is complete
+        setMessages((prevMessages) =>
+          prevMessages.map((msg) =>
+            msg.id === tempAiMessageId
+              ? {
+                  ...msg,
+                  parts: parseMessageText(msg.text, msg.id),
+                }
+              : msg
+          )
+        );
+      } else {
+        // If streaming is not supported, simulate streaming
+        const data = await response.json();
+        const aiFullText = data.output || 'No response from AI.';
+        await simulateStreaming(aiFullText, tempAiMessageId);
+      }
     } catch (error) {
       console.error('Error fetching AI response:', error);
-      const errorMessage: Message = {
-        id: uuidv4(), // Temporary ID since backend failed to provide one
-        sender: 'ai',
-        text: 'Error processing your request.',
-        timestamp: new Date().toISOString(),
-        parts: parseMessageText('Error processing your request.', uuidv4()),
-      };
-      setMessages((prev) => [...prev, errorMessage]);
+
+      // Update the AI message with an error message
+      setMessages((prevMessages) =>
+        prevMessages.map((msg) =>
+          msg.id === tempAiMessageId
+            ? {
+                ...msg,
+                text: 'Error processing your request.',
+                parts: parseMessageText('Error processing your request.', msg.id),
+              }
+            : msg
+        )
+      );
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  /**
+   * Simulates streaming by revealing the AI response one character at a time.
+   * @param text The full AI response text.
+   * @param messageId The ID of the AI message to update.
+   */
+  const simulateStreaming = async (text: string, messageId: string) => {
+    for (let i = 0; i < text.length; i++) {
+      // Append one character at a time
+      const currentText = text.substring(0, i + 1);
+      setMessages((prevMessages) =>
+        prevMessages.map((msg) =>
+          msg.id === messageId
+            ? {
+                ...msg,
+                text: currentText,
+                parts: parseMessageText(currentText, msg.id),
+              }
+            : msg
+        )
+      );
+      // Adjust the delay as needed for a smoother typing effect
+      await new Promise((resolve) => setTimeout(resolve, 20));
     }
   };
 
@@ -227,15 +310,17 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ onClose }) => {
         throw new Error(`Backend GET error: ${response.statusText}`);
       }
 
-      const data: Message[] = await response.json();
+      const data: any[] = await response.json();
 
       const messagesWithParts = data.map((msg) => ({
         ...msg,
-        parts: parseMessageText(msg.text, msg.id),
+        id: String(msg.id), // Ensure the ID is a string
+        parts: parseMessageText(msg.text, String(msg.id)),
       }));
       setMessages(messagesWithParts);
     } catch (error) {
       console.error('Error fetching message history:', error);
+      // Optionally, display an error message to the user
     }
   };
 
@@ -264,7 +349,7 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ onClose }) => {
                 code: part.content,
               })
             }
-            onDelete={() => handleDeleteCodeBlock(part.messageId, part.content)}
+            onDelete={() => handleDeleteCodeBlock(part.messageId, part.id)}
           />
         );
       } else {
@@ -277,7 +362,7 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ onClose }) => {
     });
   };
 
-  const parseMessageText = (text: string, messageId: number): Part[] => {
+  const parseMessageText = (text: string, messageId: string): Part[] => {
     if (!text) {
       return [{ type: 'text', id: uuidv4(), content: 'No message content available.', messageId }];
     }
@@ -320,15 +405,21 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ onClose }) => {
     return result;
   };
 
-  const handleDeleteCodeBlock = async (messageId: number, codeContent: string) => {
+  const handleDeleteCodeBlock = async (messageId: string, partId: string) => {
     try {
+      const message = messages.find((msg) => msg.id === messageId);
+      if (!message) throw new Error('Message not found');
+
+      const part = message.parts.find((p) => p.id === partId);
+      if (!part) throw new Error('Code block not found');
+
       const response = await fetch(`http://localhost:5000/api/code/${messageId}`, {
         method: 'DELETE',
         headers: {
           'Content-Type': 'application/json',
           'Session-ID': sessionId,
         },
-        body: JSON.stringify({ selectedCode: codeContent }),
+        body: JSON.stringify({ selectedCode: part.content }),
       });
 
       if (!response.ok) {
@@ -341,7 +432,7 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ onClose }) => {
 
       // Optionally, remove the deleted code block from selectedCodeBlocks
       setSelectedCodeBlocks((prev) =>
-        prev.filter((block) => !(block.messageId === messageId && block.code === codeContent))
+        prev.filter((block) => !(block.messageId === messageId && block.partId === partId))
       );
     } catch (error) {
       console.error('Error deleting code block:', error);
@@ -359,7 +450,7 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ onClose }) => {
     try {
       // Delete all selected code blocks sequentially
       for (const block of selectedCodeBlocks) {
-        await handleDeleteCodeBlock(block.messageId, block.code);
+        await handleDeleteCodeBlock(block.messageId, block.partId);
       }
 
       // After all deletions, fetch the updated message history
@@ -369,6 +460,7 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ onClose }) => {
       setSelectedCodeBlocks([]);
     } catch (error) {
       console.error('Error deleting selected code blocks:', error);
+      // Optionally, display an error message to the user
     } finally {
       setIsLoading(false);
     }
