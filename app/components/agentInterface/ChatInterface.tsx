@@ -1,7 +1,7 @@
 // frontend/src/components/ChatInterface.tsx
 
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import Draggable, { DraggableData, DraggableEvent } from 'react-draggable';
+import Draggable, { type DraggableData, type DraggableEvent } from 'react-draggable';
 import { v4 as uuidv4 } from 'uuid';
 import Switch from '@mui/material/Switch';
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
@@ -101,7 +101,7 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ onClose }) => {
 
       if (!response.ok) throw new Error(`Message send error: ${response.statusText}`);
 
-      const data = await response.json();
+      const data:any= await response.json();
 
       const userMessage: Message = {
         id: String(data.messageId), // Ensure ID is a string
@@ -198,7 +198,7 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ onClose }) => {
         );
       } else {
         // If streaming is not supported, simulate streaming
-        const data = await response.json();
+        const data:any = await response.json();
         const aiFullText = data.output || 'No response from AI.';
         await simulateStreaming(aiFullText, tempAiMessageId);
       }
@@ -228,9 +228,11 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ onClose }) => {
    * @param messageId The ID of the AI message to update.
    */
   const simulateStreaming = async (text: string, messageId: string) => {
-    for (let i = 0; i < text.length; i++) {
-      // Append one character at a time
-      const currentText = text.substring(0, i + 1);
+    const chunkSize = 8; // Number of characters per interval
+    for (let i = 0; i < text.length; i += chunkSize) {
+      // Determine the end index for the current chunk
+      const end = Math.min(i + chunkSize, text.length);
+      const currentText = text.substring(0, end);
       setMessages((prevMessages) =>
         prevMessages.map((msg) =>
           msg.id === messageId
@@ -242,8 +244,8 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ onClose }) => {
             : msg
         )
       );
-      // Adjust the delay as needed for a smoother typing effect
-      await new Promise((resolve) => setTimeout(resolve, 20));
+      // Adjust delay as needed
+      await new Promise((resolve) => setTimeout(resolve, 5));
     }
   };
 
@@ -423,7 +425,7 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ onClose }) => {
       });
 
       if (!response.ok) {
-        const errorData = await response.json();
+        const errorData:any = await response.json();
         throw new Error(`Delete error: ${errorData.message || response.statusText}`);
       }
 
@@ -721,7 +723,7 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ onClose }) => {
               )}
             </div>
           ))}
-          {isLoading && <div className="chat-loading-indicator">Loading...</div>}
+          {isLoading && <div className="chat-loading-indicator">Thinking...</div>}
           <div ref={messageEndRef} />
         </div>
 
